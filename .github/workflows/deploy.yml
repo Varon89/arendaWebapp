@@ -1,0 +1,51 @@
+name: Deploy to Ubuntu Server on push
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: ssh-keyscan -H 161.97.137.120 >> ~/.ssh/known_hosts
+
+      - name: Ensure directory exists and sync files
+        run: |
+          ssh root@161.97.137.120 "mkdir -p /root/app/arenda"
+          rsync -avz ./ root@161.97.137.120:/root/app/arenda
+
+      - name: Install dependencies
+        run: ssh root@161.97.137.120 "cd /root/app/arenda && npm install"
+
+      - name: Append PORT environment variable to .env file
+        run: ssh root@161.97.137.120 "echo -e '\nPORT=8088' >> /root/app/arenda/.env"
+
+      - name: Check and restart or start pm2 process
+        run: |
+          ssh root@161.97.137.120 << 'EOF'
+            cd /root/app/arenda
+            if pm2 list | grep -q main; then
+              pm2 restart 1
+            else
+              if lsof -Pi :8088 -sTCP:LISTEN -t >/dev/null ; then
+                echo "Port 8088 is already in use"
+              else
+                npm run pm2
+              fi
+            fi
+          EOF
+
+    env:
+      NODE_ENV: production

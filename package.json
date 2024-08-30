@@ -1,0 +1,41 @@
+{
+  "name": "register",
+  "version": "1.0.0",
+  "description": "registration of users in the database and sending messages to the telegram register for rent chanel",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "pm2": "pm2 start server.js --name register --watch",
+    "pm2:stop": "pm2 stop register",
+    "pm2:delete": "pm2 delete register",
+    "pm2:logs": "pm2 logs register",
+    "pm2:status": "pm2 status register",
+    "pm2:restart": "pm2 restart register",
+    "pm2:save": "pm2 save",
+    "pm2:startup": "pm2 startup",
+    "pm2:unstartup": "pm2 unstartup",
+    "pm2:dump": "pm2 dump",
+    "pm2:reload": "pm2 reload register",
+    "pm2:reset": "pm2 reset register",
+    "pm2:describe": "pm2 describe register",
+    "pm2:monit": "pm2 monit",
+    "pm2:prettylist": "pm2 prettylist",
+    "pm2:prettydump": "pm2 prettydump",
+    "pm2:prettyprint": "pm2 prettyprint"
+  },
+  "keywords": [],
+  "author": "zayyad_a",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "mysql": "^2.18.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "pm2": "^5.4.1",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.3"
+  }
+}
