@@ -1150,7 +1150,7 @@ const checkWinners = async (ids, chatId, message, type = null) => {
 const controller = require("./src/controller/user.controller");
 io.on("connection", (socket) => {
   socket.on("/all_accs", async (data) => {
-    console.log("all_accs", data);
+    console.log("data", data);
 
     const allAccs = await controller.getAllAccs();
     socket.emit("/all_accs", allAccs);
