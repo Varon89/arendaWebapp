@@ -1158,7 +1158,7 @@ io.on("connection", (socket) => {
 });
 
 server.listen(83, () => {
-  console.log(`server is running on port 83...`);
+  console.log(`server is running on port 83`);
 });
 
 module.exports = bot;
