@@ -1,3 +1,5 @@
+const { token } = require("../mocks/security");
+
 const convertToTimeFormat = (value) => {
   const num = parseFloat(value);
   if (num >= 24) {
@@ -35,33 +37,19 @@ const generateId = () => {
   return uniqueNumber.toString();
 };
 
-// function parseText(text) {
-//   const cleanText = text.trim().replace(/\n/g, " ").replace(/'/g, '"');
-//   const priceListStart = cleanText.indexOf("price_list: {");
-//   const priceListEnd = cleanText.indexOf("}", priceListStart) + 1;
-//   const priceListStr = cleanText.substring(priceListStart, priceListEnd);
-//   const otherFieldsStr = cleanText
-//     .substring(0, priceListStart)
-//     .replace("/acc_info", "")
-//     .trim();
-
-//   let priceList = {};
-//   try {
-//     priceList = JSON.parse(priceListStr.replace("price_list: ", ""));
-//   } catch (error) {
-//     console.error("price_list JSON parsing hatası:", error);
-//   }
-
-//   const otherFields = otherFieldsStr.split(",").reduce((obj, field) => {
-//     const [key, value] = field.split(":").map((part) => part.trim());
-//     if (key && value) {
-//       obj[key.replace(/"/g, "")] = value.replace(/"/g, "");
-//     }
-//     return obj;
-//   }, {});
-
-//   return { ...otherFields, price_list: priceList };
-// }
+const filePathCache = {};
+const getImgPathLink = async (fileId) => {
+  if (filePathCache[fileId]) {
+    return filePathCache[fileId];
+  }
+  const response = await fetch(
+    `https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`
+  );
+  const data = await response.json();
+  const filePath = `https://api.telegram.org/file/bot${token}/${data.result.file_path}`;
+  filePathCache[fileId] = filePath;
+  return filePath;
+};
 
 const parseTextSimple = (text) => {
   const result = {};
@@ -106,4 +94,5 @@ module.exports = {
   chunkArray,
   generateId,
   parseTextSimple,
+  getImgPathLink,
 };

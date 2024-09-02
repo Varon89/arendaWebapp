@@ -1,18 +1,21 @@
 const http = require("http");
 const socketIo = require("socket.io");
-
-const server = http.createServer();
-const io = socketIo(server, {
-  cors: {
-    origin: "http://localhost:5173",
-    methods: ["*"],
-    allowedHeaders: ["my-custom-header"],
-    credentials: true,
-  },
-});
-
 const TelegramBot = require("node-telegram-bot-api");
 const service = require("./src/service/register.service");
+const {
+  myCommands,
+  generalCommands,
+  adminCommands,
+  accData,
+  myAccs,
+  others_accs,
+} = require("./src/mocks/mocks");
+const {
+  token,
+  ownersChatId,
+  adminChatIds,
+  myChatId,
+} = require("./src/mocks/security");
 const {
   chunkArray,
   convertToTimeFormat,
@@ -20,110 +23,31 @@ const {
   parseTextSimple,
 } = require("./src/service/services");
 
-const ownersChatId = ["1831538012", "7185045229"];
-const adminChatIds = ["1831538012", "7185045229"];
-const myChatId = ["5632648116", "5909376148"];
-const token = "6874634713:AAEMZ_dAfQzeMibFqH08A7bks3FXOY7zo80";
+let mode = "dev";
+let userInfo = {};
+let acc_data = {};
+let form = {};
+let templateDatas = {};
+let callballResult = [];
+let answerTopId = 0;
+let winners = {};
+const timers = {};
+
+const server = http.createServer();
+const io = socketIo(server, {
+  transports: ["websocket", "polling"],
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
 const bot = new TelegramBot(token, { polling: true });
+bot.setMyCommands(generalCommands);
 
 bot.on("polling_error", (error) => {
   console.error(`Polling error: ${error}`);
 });
-
-let mode = "dev";
-
-const generalCommands = [
-  { command: "start", description: "Start" },
-  { command: "konkurs", description: "Konkurs" },
-];
-const adminCommands = [
-  { command: "start", description: "Start" },
-  {
-    command: "shablon",
-    description: "Shablon tayyorlash",
-  },
-  { command: "add_acc", description: "Acc qo'shish" },
-  {
-    command: "get_all_user",
-    description: "Barcha foydalanuvchilar ro'yxatini olish",
-  },
-  {
-    command: "get_user_by_id",
-    description: "ID bo'yicha foydalanuvchini topish",
-  },
-  {
-    command: "hisobla",
-    description: "Hisoblash",
-  },
-  {
-    command: "top5",
-    description: "Top 5",
-  },
-];
-const myCommands = [
-  { command: "start", description: "Start" },
-  { command: "daily", description: "Daily" },
-  { command: "hisobla", description: "Hisobla" },
-  { command: "weekly", description: "Weekly" },
-  { command: "monthly", description: "Monthly" },
-];
-
-const accData = [
-  "#V1",
-  "#V2",
-  "#V3",
-  "#V4",
-  "#V5",
-  "#V6",
-  "#V7",
-  "#V8",
-  "#V9",
-  "#V10",
-  "#T1",
-  "#T2",
-  "#T3",
-  "#T4",
-  "#M1",
-  "#M2",
-  "#M3",
-  "#M4",
-  "#M5",
-  "#CH1",
-  "#CH2",
-  "#CH3",
-  "#CH4",
-];
-const myAccs = [
-  "#V1",
-  "#V3",
-  "#V5",
-  "#V8",
-  "#V10",
-  "#T2",
-  "#T3",
-  "#M1",
-  "#M2",
-  "#M5",
-  "#CH1",
-  "#CH2",
-  "#CH3",
-  "#CH4",
-];
-const others_accs = [
-  "#V2",
-  "#V4",
-  "#V6",
-  "#V7",
-  "#V9",
-  "#T1",
-  "#T4",
-  "#M3",
-  "#M4",
-];
-
-bot.setMyCommands(generalCommands);
-
-let userInfo = {};
 
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
@@ -203,7 +127,6 @@ bot.onText(/\/app/, (msg) => {
   });
 });
 
-let acc_data = {};
 bot.onText(/\/add_acc/, (msg) => {
   const chatId = msg.chat.id;
   mode = "add";
@@ -215,7 +138,8 @@ bot.onText(/\/add_acc/, (msg) => {
   );
   const accDataMsg = `
 \`\`\`
-/acc_info name: '',
+/acc_info
+name: '',
 description: '',
 videoID: '',
 price_list: {
@@ -223,7 +147,7 @@ price_list: {
 '6 soat': '',
 '12 soat': '',
 '24 soat': '',
-'tungi tarif (20.00 - 10.00)': ''
+'Tungi Tarif (20.00 - 10.00)': ''
 }
 \`\`\`
 `;
@@ -271,12 +195,6 @@ bot.onText(/\/end/, (msg) => {
     );
   }
 });
-
-let form = {};
-let templateDatas = {};
-let callballResult = [];
-let answerTopId = 0;
-let winners = {};
 
 bot.on("callback_query", async (callbackQuery) => {
   const userId = callbackQuery.from.id;
@@ -765,24 +683,12 @@ bot.on("message", async (msg) => {
       bot.sendMessage(chatId, "Siz g'olib bo'lmadingiz!");
     }
   }
-
   if (msg?.web_app_data?.data) {
-    console.log("web_app_data", msg.web_app_data.data);
-    const ds = {
-      start_hour: "19:43",
-      time: "3 soat",
-      price: 30000,
-      accNumber: "VIP ACC #1",
-      description: "TOP MOP OLD FOLD",
-      videoId: "fddf",
-      acc_price: 100000,
-    };
-
     const data = JSON.parse(msg.web_app_data.data);
     bot.sendMessage(chatId, `Xaridingiz uchun rahmat!`);
     bot.sendMessage(
       chatId,
-      `Sizning buyurtmangiz: \nacc: ${data.accNumber} \nprice: ${
+      `Sizning buyurtmangiz: \nacc: ${data.name} \nprice: ${
         data.price
       } \nstart: ${new Date().getFullYear()}.${data.month
         ?.toString()
@@ -876,9 +782,9 @@ bot.on("contact", (msg) => {
   }
 });
 
-const timers = {};
 bot.on("photo", (msg) => {
   const chatId = msg.chat.id;
+  console.log("msg", msg);
   const img = msg.photo[msg.photo.length - 1].file_id;
   if (ownersChatId.includes(chatId.toString())) {
     if (mode === "dev") {
@@ -1149,11 +1055,19 @@ const checkWinners = async (ids, chatId, message, type = null) => {
 // user response
 const controller = require("./src/controller/user.controller");
 io.on("connection", (socket) => {
-  socket.on("/all_accs", async (data) => {
-    console.log("data", data);
+  socket.on("/all/accs", async (ds, callback) => {
+    const result = await controller.getAllAccs(ds);
+    callback(result);
+  });
 
-    const allAccs = await controller.getAllAccs();
-    socket.emit("/all_accs", allAccs);
+  socket.on("/get_acc/byId", async (id, callback) => {
+    const result = await controller.getAccById(id);
+    callback(result);
+  });
+
+  socket.on("/reserve/acc", async (ds, callback) => {
+    const result = await controller.reserveAcc(ds);
+    callback(result);
   });
 });
 

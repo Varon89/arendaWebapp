@@ -1,5 +1,6 @@
 // register.service.js
 const QueryService = require("./query.service");
+const { getImgPathLink } = require("./services");
 
 class RegisterService {
   static async checkIfRegistered(userId) {
@@ -395,13 +396,14 @@ class RegisterService {
     }
   }
   static async addAcc(acc, id) {
+    const imgPaths = await Promise.all(acc?.imgs?.map(getImgPathLink));
     const query = `INSERT INTO accounts (id, name, description, videoID, imgs, price_list, daily_price_list) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), videoID = VALUES(videoID), imgs = VALUES(imgs), price_list = VALUES(price_list), daily_price_list = VALUES(daily_price_list)`;
     const values = [
       id,
       acc.name,
       acc.description,
       acc.videoID,
-      JSON.stringify(acc.imgs),
+      JSON.stringify(imgPaths),
       JSON.stringify(acc.price_list),
       JSON.stringify(acc.daily_price_list),
     ];
