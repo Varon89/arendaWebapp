@@ -4,7 +4,7 @@ const config = {
   host: "161.97.137.120",
   user: "foodify",
   password: "Admin@1234",
-  database: "arenda",
+  database: "arenda_2",
   charset: "utf8mb4",
 };
 

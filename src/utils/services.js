@@ -89,10 +89,37 @@ const parseTextSimple = (text) => {
   return result;
 };
 
+const calculateEndDateTime = (obj) => {
+  const startDate = new Date(obj.start_date);
+  const [hours, minutes] = obj.start_hour.split(":").map(Number);
+  startDate.setHours(hours, minutes);
+
+  const endDate = new Date(startDate.getTime() + obj.time * 60 * 60 * 1000);
+
+  const formatDate = (date) =>
+    `${new Date().getFullYear()}.${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}.${String(date.getDate()).padStart(2, "0")}`;
+  const formatTime = (date) =>
+    `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes()
+    ).padStart(2, "0")}`;
+
+  return {
+    ...obj,
+    start_date: formatDate(startDate),
+    end_date: formatDate(endDate),
+    start_hour: formatTime(startDate),
+    end_hour: formatTime(endDate),
+  };
+};
+
 module.exports = {
   convertToTimeFormat,
   chunkArray,
   generateId,
   parseTextSimple,
   getImgPathLink,
+  calculateEndDateTime,
 };

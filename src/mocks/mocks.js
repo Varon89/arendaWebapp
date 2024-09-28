@@ -1,10 +1,12 @@
 const generalCommands = [
   { command: "start", description: "Start" },
+  { command: "app", description: "App" },
   { command: "konkurs", description: "Konkurs" },
 ];
 const adminCommands = [
   { command: "start", description: "Start" },
   { command: "shablon", description: "Shablon tayyorlash" },
+  { command: "app", description: "App" },
   { command: "add_acc", description: "Acc qo'shish" },
   {
     command: "get_all_user",
@@ -19,6 +21,7 @@ const adminCommands = [
 ];
 const myCommands = [
   { command: "start", description: "Start" },
+  { command: "app", description: "App" },
   { command: "daily", description: "Daily" },
   { command: "hisobla", description: "Hisobla" },
   { command: "weekly", description: "Weekly" },

@@ -1,10 +1,10 @@
-// register.service.js
+const { calculateEndDateTime } = require("../utils/services");
 const QueryService = require("./query.service");
-const { getImgPathLink } = require("./services");
+const e = require("dayjs");
 
 class RegisterService {
   static async checkIfRegistered(userId) {
-    const query = "SELECT * FROM arenda WHERE id = ?";
+    const query = "SELECT * FROM users WHERE user_id = ?";
     try {
       const result = await QueryService.dbQuery(query, [userId]);
       return result.length > 0;
@@ -15,7 +15,7 @@ class RegisterService {
   }
   static async fetchAllUsers() {
     try {
-      const query = "SELECT * FROM arenda";
+      const query = "SELECT * FROM users";
       const results = await QueryService.dbQuery(query);
       return results;
     } catch (error) {
@@ -25,7 +25,7 @@ class RegisterService {
   }
   static async fetchUserById(id) {
     try {
-      const query = "SELECT * FROM arenda WHERE id = ?";
+      const query = "SELECT * FROM users WHERE user_id = ?";
       const result = await QueryService.dbQuery(query, [id]);
       const user = result[0];
       return user;
@@ -35,10 +35,10 @@ class RegisterService {
   }
   static async handleAdminResponse(user) {
     try {
-      const query = `INSERT INTO arenda (id, name, photo, longitude, latitude, phone, username) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), photo = VALUES(photo), longitude = VALUES(longitude), latitude = VALUES(latitude), phone = VALUES(phone), username = VALUES(username)`;
+      const query = `INSERT INTO users (user_id, name, photo, longitude, latitude, phone, username) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), photo = VALUES(photo), longitude = VALUES(longitude), latitude = VALUES(latitude), phone = VALUES(phone), username = VALUES(username)`;
       const values = [
         user?.userId,
-        "",
+        user?.name || "",
         user?.photo || "",
         user?.location?.longitude,
         user?.location?.latitude,
@@ -55,21 +55,72 @@ class RegisterService {
   }
   static async handleUserResponse(user) {
     try {
-      const query = `INSERT INTO acc_orders (id, acc_number, price, time, shablon_id, imgs) VALUES (?,?,?,?,?,?)`;
+      const date = user?.start_time?.split(" - ");
+      user.start_date = date?.[0];
+      user.start_hour = date?.[1];
+      delete user.start_time;
+
+      const data = calculateEndDateTime(user);
+
+      const query = `INSERT INTO acc_orders (user_id, acc_id, paid, time, shablon_id, imgs, status, start_date, start_hour, end_date, end_hour) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE acc_id = VALUES(acc_id), paid = VALUES(paid), time = VALUES(time), shablon_id = VALUES(shablon_id), imgs = VALUES(imgs), status = VALUES(status), start_date = VALUES(start_date), start_hour = VALUES(start_hour), end_date = VALUES(end_date), end_hour = VALUES(end_hour)`;
       const imgsValue =
         user?.imgs && user.imgs.length > 0 ? JSON.stringify(user.imgs) : "[]";
+
       const values = [
-        user?.userId,
-        user?.acc_number,
-        user?.price,
-        user?.time,
-        user?.us_id,
+        data.user_id,
+        data.acc_id,
+        data.paid,
+        data.time,
+        data.shablon_id,
         imgsValue,
+        data.status,
+        data.start_date,
+        data.start_hour,
+        data.end_date,
+        data.end_hour,
       ];
+
       const result = await QueryService.dbQuery(query, values);
       const s = JSON.parse(JSON.stringify(result));
+
+      if (s.affectedRows > 0) {
+        const adjustedStartHour = `DATE_FORMAT(DATE_SUB(CONCAT('${data.start_date}', ' ', '${data.start_hour}'), INTERVAL 3 HOUR), '%Y-%m-%d %H:%i')`;
+        const adjustedEndHour = `DATE_FORMAT(DATE_SUB(CONCAT('${data.start_date}', ' ', '${data.start_hour}'), INTERVAL 2 HOUR), '%Y-%m-%d %H:%i')`;
+
+        // Start timer event query
+        const startTimerQuery = `
+    CREATE EVENT IF NOT EXISTS start_timer_${data.shablon_id} 
+    ON SCHEDULE AT (${adjustedStartHour}) 
+    DO 
+    BEGIN 
+        UPDATE acc_orders 
+        SET status = 1 
+        WHERE acc_id = '${data.acc_id}' AND shablon_id = '${data?.shablon_id}'; 
+        DROP EVENT IF EXISTS start_timer_${data?.shablon_id}; 
+    END;
+  `;
+
+        // End timer event query
+        const endTimerQuery = `
+    CREATE EVENT IF NOT EXISTS end_timer_${data.shablon_id} 
+    ON SCHEDULE AT (${adjustedEndHour}) 
+    DO 
+    BEGIN 
+        UPDATE acc_orders 
+        SET status = 0 
+        WHERE acc_id = '${data.acc_id}' AND shablon_id = '${data?.shablon_id}'; 
+        DROP EVENT IF EXISTS end_timer_${data?.shablon_id}; 
+    END;
+  `;
+
+        // Execute both queries separately
+        await QueryService.dbQuery(startTimerQuery);
+        await QueryService.dbQuery(endTimerQuery);
+      }
+
       return s.affectedRows > 0;
     } catch (error) {
+      console.error("Query Error:", error);
       return false;
     }
   }
@@ -115,35 +166,24 @@ class RegisterService {
         GROUP BY id;
     `;
 
-      // Fetch IDs that are not in the top 5 spenders along with their count
       const allIds = await QueryService.dbQuery(allIdsQuery);
-
-      // Create an array where each ID appears as many times as its count in the orders
       const weightedIds = allIds.flatMap((order) => {
         return new Array(order.count).fill(order.id);
       });
-
-      // Shuffle the array to randomize order
       const shuffledIds = weightedIds.sort(() => 0.5 - Math.random());
-      // Create a Set to ensure uniqueness of selected IDs
       const uniqueSelectedIds = new Set();
-      console.log(shuffledIds);
-
-      // Select 5 random unique IDs
       while (uniqueSelectedIds.size < 5 && shuffledIds.length > 0) {
         const randomIndex = Math.floor(Math.random() * shuffledIds.length);
         const selectedId = shuffledIds[randomIndex];
         uniqueSelectedIds.add(selectedId);
         shuffledIds.splice(randomIndex, 1); // Remove the selected ID from the array
       }
-
       return Array.from(uniqueSelectedIds);
     } catch (error) {
       console.error("Error fetching random IDs:", error);
       throw error;
     }
   }
-
   static async calcEarnings(my_accs, others_accs, type) {
     try {
       const currentDate = new Date();
@@ -309,7 +349,6 @@ class RegisterService {
       throw error;
     }
   }
-
   static async rankUsersByTotalPayments() {
     const query = `SELECT id, SUM(price) AS total_spent FROM acc_orders WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY id ORDER BY total_spent DESC LIMIT 5;`;
     try {
@@ -369,10 +408,9 @@ class RegisterService {
       throw error;
     }
   }
-
   static async addUserToWinnersList(user) {
     try {
-      const query = `INSERT INTO winners (id, prize_time, money_spent, rank_user) VALUES (?, ?, ?, ?)`;
+      const query = `INSERT INTO winners (user_id, prize_time, money_spent, rank) VALUES (?, ?, ?, ?)`;
       const result = await QueryService.dbQuery(query, [
         user.user_id,
         user.prize_time,
@@ -396,16 +434,18 @@ class RegisterService {
     }
   }
   static async addAcc(acc, id) {
-    const imgPaths = await Promise.all(acc?.imgs?.map(getImgPathLink));
-    const query = `INSERT INTO accounts (id, name, description, videoID, imgs, price_list, daily_price_list) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), videoID = VALUES(videoID), imgs = VALUES(imgs), price_list = VALUES(price_list), daily_price_list = VALUES(daily_price_list)`;
+    const daily_price_list = Object.values(acc.daily_price_list);
+    const query = `INSERT INTO accounts (acc_id, short_name, acc_name, description, video_id, imgs, owner_id, price_list, custom_price_list) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE short_name = VALUES(short_name), acc_name = VALUES(acc_name), description = VALUES(description), video_id = VALUES(video_id), imgs = VALUES(imgs), owner_id = VALUES(owner_id), price_list = VALUES(price_list), custom_price_list = VALUES(custom_price_list)`;
     const values = [
       id,
+      acc.short_name,
       acc.name,
       acc.description,
       acc.videoID,
-      JSON.stringify(imgPaths),
+      JSON.stringify(acc.imgs),
+      acc.owner_id,
       JSON.stringify(acc.price_list),
-      JSON.stringify(acc.daily_price_list),
+      JSON.stringify(daily_price_list),
     ];
 
     try {

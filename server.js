@@ -2,10 +2,12 @@ const http = require("http");
 const socketIo = require("socket.io");
 const TelegramBot = require("node-telegram-bot-api");
 const service = require("./src/service/register.service");
+const u_service = require("./src/service/user.service");
+const { setupSendMessages } = require("./src/utils/response");
+const photoHandler = require("./src/utils/photo-handler");
+
 const {
-  myCommands,
   generalCommands,
-  adminCommands,
   accData,
   myAccs,
   others_accs,
@@ -20,10 +22,12 @@ const {
   chunkArray,
   convertToTimeFormat,
   generateId,
-  parseTextSimple,
-} = require("./src/service/services");
+} = require("./src/utils/services");
+const handler = require("./src/utils/event-handler");
+const path = require("path");
+const fs = require("fs");
 
-let mode = "dev";
+let mode = {};
 let userInfo = {};
 let acc_data = {};
 let form = {};
@@ -31,9 +35,28 @@ let templateDatas = {};
 let callballResult = [];
 let answerTopId = 0;
 let winners = {};
-const timers = {};
+let orderMsg = {};
 
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  let filePath = path.join(__dirname, "imgs", req.url);
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("404 Not Found");
+      return;
+    }
+    fs.readFile(filePath, (err, content) => {
+      if (err) {
+        res.writeHead(500, { "Content-Type": "text/plain" });
+        res.end("500 Internal Server Error");
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "image/png" });
+      res.end(content);
+    });
+  });
+});
+
 const io = socketIo(server, {
   transports: ["websocket", "polling"],
   cors: {
@@ -43,158 +66,21 @@ const io = socketIo(server, {
 });
 
 const bot = new TelegramBot(token, { polling: true });
+const {
+  sendMessagesToAdmins,
+  checkWinners,
+  sendMessageForSuccess,
+  sendMessage,
+  sendPhoto,
+  sendMediaGroup,
+} = setupSendMessages(bot, winners);
 bot.setMyCommands(generalCommands);
 
 bot.on("polling_error", (error) => {
   console.error(`Polling error: ${error}`);
 });
 
-bot.onText(/\/start/, async (msg) => {
-  const chatId = msg.chat.id;
-  const userID = msg.from.id;
-  if (ownersChatId.includes(userID.toString())) {
-    bot.setMyCommands(adminCommands, {
-      scope: { type: "chat", chat_id: chatId },
-    });
-    bot.sendMessage(chatId, "Assalomu alaykum, Admin!");
-  } else if (myChatId.includes(userID.toString())) {
-    bot.setMyCommands(myCommands, {
-      scope: { type: "chat", chat_id: chatId },
-    });
-    bot.sendMessage(chatId, "Assalomu alaykum, User!");
-  } else {
-    bot.setMyCommands(generalCommands, {
-      scope: { type: "chat", chat_id: chatId },
-    });
-    const existUser = await service.checkIfRegistered(chatId);
-    const message = `
-\n*📌 DIQQAT📌*\n
-*❗️FAQAT IOS/ANDROID ✅*\n
-*❌EMULYATOR TAQIQLANADI❌*\n
-*❗️AKKAUNTDAN CHIQIB KETISH MUMKIN EMAS 📌*\n
-_Qaytib kirish niyatiz yoq bolsa yoki vaqtiz tugagandagina chiqing boshqa holatda chiqib ketib qolsangiz qayta pullik. Internetiz stabilniy bolsa oling faqat! internet ishlamay qolib chiqib ketsangiz bizda emas ayb!_\n
-*✅ NICK OZGARTIRISH MUMKIN ADMINDAN SORAB ✅*\n
-*❗️CHIT BILAN OYNASH TAQIQLANADI📌*\n
-*✅ PROVERKA QILINADI CHIT ANIQLANSA PULIZ QAYTARILMEDI VA BLOCKLANASIZ ❌*\n
-*⚠️AKKAUNT SIZ OYNAGAN VAQT ICHIDA BANGA KIRSA SIZ MAMURIY/JINOIY JAVOBGARLIKGA TORTILASIZ ⚠️⚠️⚠️*\n
-  `;
-    const options = {
-      reply_markup: {
-        inline_keyboard: [[{ text: "Roziman", callback_data: "accept_rules" }]],
-      },
-      parse_mode: "Markdown",
-    };
-    if (existUser) {
-      const link = `[ATOMIC ARENDA](tg://user?id=${7185045229})`;
-      bot.sendMessage(
-        chatId,
-        "Siz avval ro'yxatdan o'tgandiz qayta ro'yxatdan o'tishingiz shart emas!"
-      );
-      bot.sendMessage(chatId, `Akkaunt olmoqchi bo'lsangiz ${link} ga yozing`, {
-        parse_mode: "Markdown",
-      });
-    } else {
-      bot.sendMessage(chatId, message, options);
-    }
-  }
-});
-
-bot.onText(/\/id (.+)/, async (msg, match) => {
-  const chatId = msg.chat.id;
-  const id = match[1];
-  const user = await service.fetchUserById(id);
-  if (user) {
-    const link = `[${user.id}](tg://user?id=${user.id})`;
-    bot.sendLocation(chatId, user.latitude, user.longitude);
-    bot.sendPhoto(chatId, user.photo, {
-      caption: `ID: ${link}\nname: ${user?.name}\nphone: ${user.phone}`,
-      parse_mode: "Markdown",
-    });
-  } else {
-    bot.sendMessage(chatId, "Foydalanuvchi topilmadi.");
-  }
-});
-
-bot.onText(/\/app/, (msg) => {
-  const chatId = msg.chat.id;
-  const webAppUrl = "https://6v9cl48b-5173.euw.devtunnels.ms";
-  bot.sendMessage(chatId, "Site ochish uchun pastdagi tugmani bosing:", {
-    reply_markup: {
-      keyboard: [[{ text: "Platformani ochish", web_app: { url: webAppUrl } }]],
-      resize_keyboard: true,
-      one_time_keyboard: true,
-    },
-  });
-});
-
-bot.onText(/\/add_acc/, (msg) => {
-  const chatId = msg.chat.id;
-  mode = "add";
-
-  bot.sendMessage(chatId, "Accaount qo'shish modi faollashtirildi!");
-  bot.sendMessage(
-    chatId,
-    "Accaount qo'shish uchun quyida ko'rsatilgan malumotlarni ko'rsatilgandek qilib qo'shing:"
-  );
-  const accDataMsg = `
-\`\`\`
-/acc_info
-name: '',
-description: '',
-videoID: '',
-price_list: {
-'3 soat': '',
-'6 soat': '',
-'12 soat': '',
-'24 soat': '',
-'Tungi Tarif (20.00 - 10.00)': ''
-}
-\`\`\`
-`;
-
-  bot.sendMessage(chatId, accDataMsg, { parse_mode: "Markdown" });
-});
-
-bot.onText(/\/acc_info/, (msg) => {
-  const chatId = msg.chat.id;
-  const msgText = msg.text;
-  acc_data = parseTextSimple(msgText);
-  bot.sendMessage(chatId, "Accaount ma'lumotlari muvaffaqiyatli qo'shildi!");
-  bot.sendMessage(chatId, "Endi 4 ta rasm yuboring!");
-});
-
-bot.onText(/\/daily_price_list (.+)/, (msg, match) => {
-  const chatId = msg.chat.id;
-  const daily_price_list = JSON.parse(match[1]);
-  acc_data = { ...acc_data, daily_price_list };
-  console.log("acc", acc_data);
-  bot.sendMessage(chatId, "Daily price list muvaffaqiyatli qo'shildi!");
-  bot.sendMessage(
-    chatId,
-    "Accaount qo'shishni yakunlash uchun /end ni bosing!"
-  );
-});
-
-bot.onText(/\/end/, (msg) => {
-  const chatId = msg.chat.id;
-  const id = generateId();
-  if (!acc_data?.price_list) {
-    return bot.sendMessage(chatId, "Accaount ma'lumotlari to'liq emas!");
-  }
-  const s = service.addAcc(acc_data, id);
-  if (s) {
-    mode = "dev";
-    acc_data = {};
-    return bot.sendMessage(chatId, "Accaount muvaffaqiyatli qo'shildi!");
-  } else {
-    mode = "dev";
-    acc_data = {};
-    return bot.sendMessage(
-      chatId,
-      "Xatolik yuz berdi. Iltimos qayta urinib ko'ring!"
-    );
-  }
-});
+handler.setupEventHandlers(bot);
 
 bot.on("callback_query", async (callbackQuery) => {
   const userId = callbackQuery.from.id;
@@ -230,7 +116,7 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
       },
       parse_mode: "Markdown",
     };
-    bot.sendMessage(
+    sendMessage(
       userId,
       "*Iltimos yuqoridagi videodagidek telefon raqamingizni ulashing*",
       options
@@ -239,8 +125,7 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
       text: "Siz barcha qoidalarni qabul qildingiz!",
       show_alert: false,
     });
-  }
-  if (callbackData?.startsWith("admin_")) {
+  } else if (callbackData?.startsWith("admin_")) {
     const userId = callbackData?.split("_")[2];
     const action = callbackData?.split("_")[1];
     if (action === "accept") {
@@ -260,16 +145,13 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
           caption: adminMessage,
           parse_mode: "Markdown",
         });
-        bot.sendMessage(
+        sendMessage(
           user?.userId,
           "Tabriklaymiz! Sizning ma'lumotlaringiz qabul qilindi."
         );
         sendMessageForSuccess(`Yangi ${link} foydalanuvchi qo'shildi.`);
       } else {
-        bot.sendMessage(
-          userId,
-          "Xatolik yuz berdi. Iltimos qayta urinib ko'ring."
-        );
+        sendMessage(userId, "Xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
       }
       bot.answerCallbackQuery(callbackQuery.id, {
         text: "foydalanuvchi qabul qilindi!",
@@ -284,23 +166,17 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         show_alert: false,
       });
     }
-  }
-  if (callbackData.startsWith("acc_number")) {
+  } else if (callbackData.startsWith("acc_number")) {
     const acc_number = callbackData.split("_")[2];
     form[userId] = { ...form[userId], acc_number, order: "time" };
-    bot.sendMessage(
-      userId,
-      "*Vaqtini raqam* _(1/1.5/2)_ *ko'rishinda kiriting:*",
-      {
-        parse_mode: "Markdown",
-      }
-    );
+    sendMessage(userId, "*Vaqtini raqam* _(1/1.5/2)_ *ko'rishinda kiriting:*", {
+      parse_mode: "Markdown",
+    });
     bot.answerCallbackQuery(callbackQuery.id, {
       text: "Akkaunt qabul qilindi!",
       show_alert: false,
     });
-  }
-  if (callbackData.startsWith("form_")) {
+  } else if (callbackData.startsWith("form_")) {
     const us_id = callbackData.split("_")[2];
     const action = callbackData.split("_")[1];
 
@@ -324,7 +200,7 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         imgs: user.imgs,
       };
 
-      const s = await service.handleUserResponse(value, adminChatIds, bot);
+      const s = await service.handleUserResponse(value);
       const groupChatId = "-1002140035192";
       const formattedValue = user.price.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
       const link = `[${userId}](tg://user?id=${userId})`;
@@ -367,8 +243,7 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         show_alert: true,
       });
     }
-  }
-  if (callbackData.startsWith("hisobla")) {
+  } else if (callbackData.startsWith("hisobla")) {
     const acc_number = callbackData.split("_")[1];
     let percent;
     switch (acc_number) {
@@ -392,7 +267,7 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
     const moneyForOwner = (parseInt(total_price1) * percent)
       .toString()
       .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-    bot.sendMessage(
+    sendMessage(
       userId,
       `*Sizning akkauntingiz ${acc_number}👇*\n\n*JAMI: ${total_price} so'm 🧾*\n\n*AKK EGASIGA: ${moneyForOwner} so'm ✅*`,
       { parse_mode: "Markdown" }
@@ -401,13 +276,12 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
       text: `${acc_number} - ACCga oid mablag' hisoblangi!`,
       show_alert: false,
     });
-  }
-  if (callbackData.startsWith("konkurs_")) {
+  } else if (callbackData.startsWith("konkurs_")) {
     const action = callbackData.split("_")[1];
     const type = callbackData.split("_")?.[2];
     if (action === "cancel") {
       answerTopId = callbackQuery.message.message_id;
-      bot.sendMessage(
+      sendMessage(
         userId,
         "Yangi ro'yxat uchun 5 ta ID ro'yxati (,) bilan yozib jo'nating!"
       );
@@ -430,13 +304,154 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         show_alert: false,
       });
     }
+  } else if (callbackData.startsWith("order_")) {
+    const action = callbackData.split("_")[1];
+    const user_id = callbackData.split("_")[2];
+    const groupChatId = "-1002389470396";
+    if (action === "accept") {
+      mode[user_id] = "user_dev";
+      bot.editMessageReplyMarkup(
+        {
+          inline_keyboard: [],
+        },
+        {
+          chat_id: groupChatId,
+          message_id: orderMsg[user_id],
+        }
+      );
+      sendMessage(groupChatId, "*Buyurtma qabul qilindi! ✅*", {
+        reply_to_message_id: orderMsg[user_id],
+        parse_mode: "Markdown",
+      });
+
+      sendMessage(
+        user_id,
+        "*Admin buyurtmangizni tasdiqladi!*\n*Endi quyidagi @ATOMIC_CARDS kartalarimizdan biriga to'lov qilib, to'lov chekini bu yerga jo'nating!*",
+        { parse_mode: "Markdown" }
+      );
+      bot.answerCallbackQuery(callbackQuery.id, {
+        text: "buyurtma olindi!",
+        show_alert: false,
+      });
+    }
+  } else if (callbackData.startsWith("payment_order")) {
+    const action = callbackData.split("_")[2];
+    const user_id = callbackData.split("_")[3];
+    const groupChatId = "-1002295458462";
+    if (action === "accept" && ownersChatId.includes(userId.toString())) {
+      // const user = {
+      //   id: "328314",
+      //   start_hour: "14:47",
+      //   day: 20,
+      //   time: "3 soat",
+      //   price: "140000",
+      //   month: 9,
+      //   acc_id: "128506",
+      //   short_name: "#V1",
+      //   acc_name: "VIP ACC #1",
+      //   description: "BAPE + BAPE + BAPE",
+      //   video_id: "VGUTa6qSvKk",
+      //   imgs: '["http://localhost:83/img_40759a.jpg","http://localhost:83/img_4c2a3f.jpg","http://localhost:83/img_12501e.jpg","http://localhost:83/img_03f6ee.jpg"]',
+      //   owner_id: "234567844",
+      //   custom_price_list:
+      //     '["122", "211", "211", "212", "2121", "21", "2111122"]',
+      //   price_list: [
+      //     { hour: "3 soat", price: "140000" },
+      //     { hour: "6 soat", price: "200000" },
+      //     { hour: "12 soat", price: "260000" },
+      //     { hour: "24 soat", price: "300000" },
+      //     { hour: "Tungi Tarif(22:00-10:00)", price: "180000" },
+      //   ],
+      //   status: null,
+      //   daily_price_list: ["122", "211", "211", "212", "2121", "21", "2111122"],
+      //   photo: [
+      //     "AgACAgIAAxkBAAICxmbqzKdvHtT1X7z0oKIsgOVi7QuqAAJg5TEbj6hZSy-FYakFArj6AQADAgADeQADNgQ",
+      //   ],
+      // };
+      const user = form[user_id];
+      if (!user) {
+        bot.answerCallbackQuery(callbackQuery.id, {
+          text: "Foydalanuvchi topilmadi!",
+          show_alert: true,
+        });
+        return;
+      }
+
+      sendMessage(groupChatId, `*№${user?.id} Buyurtma qabul qilindi! ✅*`, {
+        parse_mode: "Markdown",
+      });
+
+      sendMessage(
+        user_id,
+        `*Buyurtma id* №\`${user?.id}\`\n*Tabriklaymiz sizning buyurtmangiz muvoffaqiyatli tasdiqlandi*`,
+        { parse_mode: "MarkdownV2" }
+      );
+
+      const convertTime = (time) => {
+        const t = time?.split(" ");
+        if (t[1] === "soat") return t[0];
+        if (t[1] === "kun") return t[0] * 24;
+      };
+
+      const value = {
+        user_id,
+        acc_id: user.acc_id,
+        time: convertTime(user.time),
+        price: user.price,
+        shablon_id: user?.id,
+        start_time: `${user.month?.toString().padStart(2, "0")}.${user.day
+          ?.toString()
+          .padStart(2, "0")} - ${user.start_hour}`,
+        imgs: user.photo,
+      };
+
+      const s = await service.handleUserResponse(value);
+      const paidGrId = "-1002140035192";
+      const formattedValue = user.price.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      const link = `[${user_id}](tg://user?id=${user_id})`;
+      const adminMessage = `ID: ${link}\nACC: ${
+        user.acc_short_name
+      }\nVAQTI: ${convertToTimeFormat(
+        user.time
+      )}\n\nNARXI: ${formattedValue} so'm`;
+
+      if (s) {
+        bot.answerCallbackQuery(callbackQuery.id, {
+          text: "Buyurtma yakunlandi 😊",
+          show_alert: true,
+        });
+        if (user.photo && user.photo.length > 1) {
+          const media = user.photo.map((img, index) => ({
+            type: "photo",
+            media: img,
+            caption: index === 0 ? adminMessage : "",
+            parse_mode: "Markdown",
+          }));
+          sendMediaGroup(paidGrId, media);
+          form[user_id] = {};
+        } else {
+          sendPhoto(paidGrId, user.photo[0], {
+            caption: adminMessage,
+            parse_mode: "Markdown",
+          });
+          form[user_id] = {};
+        }
+      }
+    } else {
+      bot.answerCallbackQuery(callbackQuery.id, {
+        text: "Sizda bu uchun ruxsat yo'q!",
+        show_alert: true,
+      });
+    }
   }
 });
 
 bot.on("message", async (msg) => {
   const chatId = msg.from.id;
   const userId = msg.from.id;
+  const username = msg.from.first_name;
   const command = msg.text;
+
   if (
     ownersChatId?.includes(userId.toString()) ||
     myChatId?.includes(userId.toString())
@@ -444,31 +459,31 @@ bot.on("message", async (msg) => {
     if (command === "/get_all_user") {
       const results = await service.fetchAllUsers(chatId);
       if (!results.length) {
-        bot.sendMessage(chatId, "Foydalanuvchilar topilmadi.");
+        sendMessage(chatId, "Foydalanuvchilar topilmadi.");
       } else {
         results.forEach((user, index) => {
           const link = `[${user?.id}](tg://user?id=${user.id})`;
-          bot.sendMessage(
-            chatId,
-            `${index + 1}. ID: ${link}\nUsername: ${user?.username}\nPhone: ${
-              user.phone
-            }`,
-            { parse_mode: "Markdown" }
-          );
+          setTimeout(() => {
+            sendMessage(
+              chatId,
+              `${index + 1}. ID: ${link}\nUsername: ${user?.username}\nPhone: ${
+                user.phone
+              }`,
+              { parse_mode: "Markdown" }
+            );
+          }, index * 250);
         });
       }
-    }
-    if (command === "/get_user_by_id") {
-      bot.sendMessage(
+    } else if (command === "/get_user_by_id") {
+      sendMessage(
         chatId,
         "*Iltimos ID raqamini (/id 0000000) sifatida yuboring:*",
         { parse_mode: "Markdown" }
       );
-    }
-    if (command === "/shablon") {
+    } else if (command === "/shablon") {
       form[chatId] = {};
       const chunkedAccData = chunkArray(accData, 5);
-      bot.sendMessage(chatId, "*Akkaunt tanlang:*", {
+      sendMessage(chatId, "*Akkaunt tanlang:*", {
         reply_markup: {
           inline_keyboard: chunkedAccData.map((chunk) =>
             chunk.map((acc) => ({
@@ -479,10 +494,9 @@ bot.on("message", async (msg) => {
         },
         parse_mode: "Markdown",
       });
-    }
-    if (command === "/hisobla") {
+    } else if (command === "/hisobla") {
       const chunkedAccData = chunkArray(accData, 5);
-      bot.sendMessage(chatId, "Qaysi akkauntni hisoblamoqchisiz?", {
+      sendMessage(chatId, "Qaysi akkauntni hisoblamoqchisiz?", {
         reply_markup: {
           inline_keyboard: chunkedAccData.map((chunk) =>
             chunk.map((acc) => ({
@@ -492,11 +506,10 @@ bot.on("message", async (msg) => {
           ),
         },
       });
-    }
-    if (command === "/top5") {
+    } else if (command === "/top5") {
       const top5 = await service.rankUsersByTotalPayments();
       if (!top5.length) {
-        bot.sendMessage(chatId, "Foydalanuvchilar topilmadi.");
+        sendMessage(chatId, "Foydalanuvchilar topilmadi.");
       } else {
         const message = top5.map((user, index) => {
           const link = `[${user?.user_id}](tg://user?id=${user.user_id})`;
@@ -514,7 +527,7 @@ bot.on("message", async (msg) => {
           },
           parse_mode: "Markdown",
         };
-        bot.sendMessage(
+        sendMessage(
           chatId,
           [
             "*Eng ko'p acc olgan TOP 5 talik *👇\n",
@@ -524,13 +537,10 @@ bot.on("message", async (msg) => {
           options
         );
       }
-    }
-    if (command === "/random") {
+    } else if (command === "/random") {
       const randomWinners = await service.getRandomIdsExcludingTop5();
-
-      console.log(randomWinners);
       if (!randomWinners.length) {
-        bot.sendMessage(chatId, "Foydalanuvchilar topilmadi.");
+        sendMessage(chatId, "Foydalanuvchilar topilmadi.");
       } else {
         const message = randomWinners.map((user, index) => {
           const link = `[${user}](tg://user?id=${user})`;
@@ -548,7 +558,7 @@ bot.on("message", async (msg) => {
           },
           parse_mode: "Markdown",
         };
-        bot.sendMessage(
+        sendMessage(
           chatId,
           [
             "*Random tanlov natijasi*👇\n",
@@ -559,8 +569,7 @@ bot.on("message", async (msg) => {
         );
       }
     }
-  }
-  if (myChatId?.includes(userId.toString())) {
+  } else if (myChatId?.includes(userId.toString())) {
     if (command === "/daily") {
       try {
         const earnings = await service.calcEarnings(
@@ -588,10 +597,10 @@ bot.on("message", async (msg) => {
           *DAILY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
         `;
 
-        bot.sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
+        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
       } catch (error) {
         console.error("Error calculating daily earnings:", error);
-        bot.sendMessage(
+        sendMessage(
           chatId,
           "Kunlik daromadlarni hisoblashda xatolik yuz berdi."
         );
@@ -625,10 +634,10 @@ bot.on("message", async (msg) => {
           *WEEKLY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
         `;
 
-        bot.sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
+        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
       } catch (error) {
         console.error("Error calculating weekly earnings:", error);
-        bot.sendMessage(
+        sendMessage(
           chatId,
           "Haftalik daromadlarni hisoblashda xatolik yuz berdi."
         );
@@ -662,40 +671,79 @@ bot.on("message", async (msg) => {
         *MONTHLY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
       `;
 
-        bot.sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
+        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
       } catch (error) {
         console.error("Error calculating monthly earnings:", error);
-        bot.sendMessage(
+        sendMessage(
           chatId,
           "Oylik daromadlarni hisoblashda xatolik yuz berdi."
         );
       }
     }
-  }
-  if (command === "/konkurs") {
+  } else if (command === "/konkurs") {
     const s = await service.fetchWinner(chatId);
     if (s) {
-      bot.sendMessage(
+      sendMessage(
         chatId,
         `Tabriklaymiz! Siz random tanlovda g'olib bo'ldingiz va ${s?.prize_time} soatga akkaunt olasiz!`
       );
     } else {
-      bot.sendMessage(chatId, "Siz g'olib bo'lmadingiz!");
+      sendMessage(chatId, "Siz g'olib bo'lmadingiz!");
     }
-  }
-  if (msg?.web_app_data?.data) {
+  } else if (msg?.web_app_data?.data) {
+    const groupChatId = "-1002389470396";
     const data = JSON.parse(msg.web_app_data.data);
-    bot.sendMessage(chatId, `Xaridingiz uchun rahmat!`);
-    bot.sendMessage(
-      chatId,
-      `Sizning buyurtmangiz: \nacc: ${data.name} \nprice: ${
-        data.price
-      } \nstart: ${new Date().getFullYear()}.${data.month
+    const id = generateId();
+    form[chatId] = { id, ...form[chatId], ...data };
+    const existUser = await service.checkIfRegistered(chatId);
+    if (existUser) {
+      sendMessage(
+        chatId,
+        `Xaridingiz uchun rahmat!\nBuyurtma admin tomonidan ko'rib chiqilib sizga xabar beriladi!`
+      );
+      const formattedPrice = data?.price
+        ?.toString()
+        ?.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      sendMessage(
+        chatId,
+        `Sizning buyurtmangiz: \nacc: ${
+          data.acc_name
+        } \nprice: ${formattedPrice} \nstart: ${new Date().getFullYear()}.${data.month
+          ?.toString()
+          .padStart(2, "0")}.${data.day?.toString().padStart(2, "0")} - ${
+          data.start_hour
+        }\ndavomiyligi: ${data.time}`
+      );
+
+      const link = `[${username}](tg://user?id=${chatId})`;
+      const message = `*Yangi buyurtma №${id}*\n\nACC: ${
+        data.acc_name
+      }\nNarxi: ${formattedPrice} so'm\nstart: ${data.month
         ?.toString()
         .padStart(2, "0")}.${data.day?.toString().padStart(2, "0")} - ${
         data.start_hour
-      }\ndavomiyligi: ${data.time}`
-    );
+      }\ndavomiyligi: ${data.time}\n\n*Buyurtma beruvchi:* ${link} - ${chatId}`;
+
+      const options = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "❌", callback_data: `order_reject_${chatId}` },
+              { text: "✅", callback_data: `order_accept_${chatId}` },
+            ],
+          ],
+        },
+        parse_mode: "Markdown",
+      };
+      bot
+        .sendMessage(groupChatId, message, options)
+        .then((sentMessage) => (orderMsg[chatId] = sentMessage.message_id));
+    } else {
+      sendMessage(
+        chatId,
+        `Iltimos buyurtma berishdan oldin ro'yxatdan o'ting! /start`
+      );
+    }
   }
 });
 
@@ -711,28 +759,25 @@ bot.on("text", async (msg) => {
   if (ownersChatId?.includes(userId.toString())) {
     if (us?.order === "time" && isNumeric) {
       form[chatId] = { ...form[chatId], time: value, order: "price" };
-      bot.sendMessage(
+      sendMessage(
         chatId,
         `* Vaqt: ${convertToTimeFormat(value)} *\n * Endi To'lovni Kiriting:*`,
         { parse_mode: "Markdown" }
       );
-    }
-    if (us?.order === "price" && isNumeric) {
+    } else if (us?.order === "price" && isNumeric) {
       form[chatId] = { ...form[chatId], price: value, order: "photo" };
-      bot.sendMessage(chatId, "*Iltimos to'lov checkini yuboring*", {
+      sendMessage(chatId, "*Iltimos to'lov checkini yuboring*", {
         parse_mode: "Markdown",
       });
-    }
-    if (isReply && msdId + 1 === answerTopId) {
+    } else if (isReply && msdId + 1 === answerTopId) {
       const user_id = isReply.match(/\d+/)[0];
-      bot.sendMessage(
+      sendMessage(
         user_id,
         `*Kechirasiz, Sizning ma'lumotlaringiz qabul qilinmadi. Qayta urinib ko'ring* /start.`,
         { parse_mode: "Markdown" }
       );
-      bot.sendMessage(user_id, msg.text);
-    }
-    if (msdId - 2 === answerTopId) {
+      sendMessage(user_id, msg.text);
+    } else if (msdId - 2 === answerTopId) {
       const type = messageText?.split("/");
       const ids = type?.[1]?.split(",");
       const message = ids.map((user, index) => {
@@ -770,11 +815,11 @@ bot.on("contact", (msg) => {
   const chatId = msg.chat.id;
   if (msg.contact.phone_number) {
     userInfo[chatId] = { ...userInfo[chatId], phone: msg.contact.phone_number };
-    bot.sendMessage(chatId, "*Passportingizning rasmni yuboring.*", {
+    sendMessage(chatId, "*Passportingizning rasmni yuboring.*", {
       parse_mode: "Markdown",
     });
   } else {
-    bot.sendMessage(
+    sendMessage(
       chatId,
       "*Mos bo'lmagan telefon raqami!*\nIltimos *Telefon raqamimni ulashish* tugmasi orqali telefon raqamingizni ulashing ulashing.",
       { parse_mode: "Markdown" }
@@ -782,106 +827,36 @@ bot.on("contact", (msg) => {
   }
 });
 
-bot.on("photo", (msg) => {
+const { adminSetup, userSetup } = photoHandler(bot, orderMsg);
+
+bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
-  console.log("msg", msg);
   const img = msg.photo[msg.photo.length - 1].file_id;
+  const name = msg.chat.first_name;
+
+  if (msg.chat.type !== "private") {
+    sendMessage(chatId, "Bu özellik yalnızca özel sohbetlerde kullanılabilir.");
+    return;
+  }
   if (ownersChatId.includes(chatId.toString())) {
-    if (mode === "dev") {
-      form[chatId] = {
-        ...form[chatId],
-        imgs: [...(form[chatId]?.imgs || []), img],
-      };
-      const us = form?.[chatId] || {};
-      const createMessage = (id) => {
-        bot.sendMessage(
-          chatId,
-          `Harid shabloni tayyor va  \`@ATOMIC_RENT_BOT ${id}\` kaliti bilan saqlandi!`,
-          { parse_mode: "Markdown" }
-        );
-
-        templateDatas[id] = form[chatId];
-        form[chatId] = {};
-        const formattedValue = us?.price?.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-        const forma = `Sizning buyurtmangiz:\n\nACC — ${
-          us?.acc_number
-        }\nVAQT — ${convertToTimeFormat(
-          us?.time
-        )} ga\nNARX — ${formattedValue} so'm\n\nAKKAUNT JAVOBGARLIGINI OLASIZMI?`;
-
-        callballResult.push({
-          type: "article",
-          id: "1",
-          title: id,
-          input_message_content: { message_text: forma },
-          description: "Buyurtma shabloni",
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "Ha, ROZIMAN✅", callback_data: `form_accept_${id}` }],
-            ],
-          },
-          parse_mode: "Markdown",
-        });
-      };
-
-      if (timers[chatId] && timers[chatId] !== null) {
-        clearTimeout(timers[chatId]);
-        timers[chatId] = null;
-        createMessage(generateId());
-      } else {
-        timers[chatId] = setTimeout(() => {
-          createMessage(generateId());
-          timers[chatId] = null;
-        }, 750);
-      }
-    } else {
-      if (acc_data.imgs?.length === 3) {
-        acc_data.imgs = [...(acc_data?.imgs || []), img];
-        bot.sendMessage(chatId, "Rasmlar muvoffaqiyatli qo'shildi!");
-        const arrayWith30interinden = Array.from(
-          { length: 31 },
-          (_, i) => `${i + 1}`
-        );
-        bot.sendMessage(
-          chatId,
-          `Endi 1 oy uchun kunlik narxlar to'plamini ko'rsatilganidek \`/daily_price_list ${JSON.stringify(
-            arrayWith30interinden
-          )}\` jo'nating!`,
-          {
-            parse_mode: "Markdown",
-          }
-        );
-      } else {
-        acc_data.imgs = [...(acc_data?.imgs || []), img];
-      }
-    }
-  } else {
-    userInfo[chatId] = {
-      ...userInfo[chatId],
-      photo: img,
-      name: msg.chat.first_name,
-    };
-
-    const options = {
-      reply_markup: {
-        keyboard: [[{ text: "Locatsiyamni ulashish", request_location: true }]],
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      },
-      parse_mode: "Markdown",
-    };
-    return bot.sendMessage(
+    adminSetup(
       chatId,
-      "*Iltimos shaxsiy Locatsiyangizni ulang:*",
-      options
+      form,
+      mode,
+      callballResult,
+      templateDatas,
+      img,
+      acc_data
     );
+  } else {
+    userSetup(chatId, form, mode, userInfo, name, img);
   }
 });
 
 bot.on("location", (msg) => {
   const chatId = msg.chat.id;
   userInfo[chatId] = { ...userInfo[chatId], location: msg.location };
-  bot.sendMessage(
+  sendMessage(
     chatId,
     `Iltimos endi AKK JAVOBGARLIGINI OLAMAN degan video jo'nating, videoda gapirasiz:\n\n> Men, Ism Familiya, Tugilgan Sana, da tug'ilganman, ATOMIC ARENDA dan akk arenda olaman Akkauntga biron nima bolsa hammasini javobgarligini olaman\n
     `,
@@ -904,7 +879,7 @@ bot.on("video_note", (msg) => {
   const user = userInfo[chatId];
   const adminMessage = `Yangi Registiratsiya:\n— ism: ${user?.name}\n— tel: ${user?.phone}\n— user name: ${link}\n— user ID: ${user?.userId}`;
   sendMessagesToAdmins(user, adminMessage, true);
-  bot.sendMessage(
+  sendMessage(
     chatId,
     "Barcha malumotlaringiz ko'rib chiqilmoqda. Iltimos admin tasdiqlashini kuting!"
   );
@@ -913,11 +888,19 @@ bot.on("video_note", (msg) => {
 bot.on("video", (msg) => {
   const chatId = msg.chat.id;
   if (!ownersChatId.includes(chatId.toString())) {
-    bot.sendMessage(
-      chatId,
-      "*Iltimos video emas video xabar jo'nating jo'nating!*",
-      { parse_mode: "Markdown" }
-    );
+    if (mode[chatId] === "user_dev") {
+      sendMessage(
+        chatId,
+        "*Iltimos check uchun video emas rasm yuboring!*\n*Yoki @ARENDA_BRO ga murojaat qiling!*",
+        { parse_mode: "Markdown" }
+      );
+    } else {
+      sendMessage(
+        chatId,
+        "*Iltimos video emas video xabar jo'nating jo'nating!*",
+        { parse_mode: "Markdown" }
+      );
+    }
   }
 });
 
@@ -926,7 +909,7 @@ bot.on("voice", (msg) => {
   const isReply = msg.reply_to_message?.text || null;
   if (isReply && ownersChatId.includes(chatId.toString())) {
     const user_id = isReply.match(/\d+/)[0];
-    bot.sendMessage(
+    sendMessage(
       user_id,
       `*Kechirasiz, Sizning ma'lumotlaringiz qabul qilinmadi. Qayta urinib ko'ring* @/start.`,
       { parse_mode: "Markdown" }
@@ -935,139 +918,61 @@ bot.on("voice", (msg) => {
   }
 });
 
-const sendMessagesToAdmins = async (user, adminMessage, k = false) => {
-  for (const adminChatId of adminChatIds) {
-    try {
-      await bot.sendVideoNote(adminChatId, user?.video_note);
-    } catch (error) {
-      continue;
-    }
-
-    try {
-      await bot.sendLocation(
-        adminChatId,
-        user?.location?.latitude,
-        user?.location?.longitude
-      );
-    } catch (error) {
-      continue;
-    }
-
-    try {
-      const options = {
-        caption: adminMessage,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "✅ ✅ ✅",
-                callback_data: `admin_accept_${user?.userId}`,
-              },
-              {
-                text: "❌ ❌ ❌",
-                callback_data: `admin_reject_${user?.userId}`,
-              },
-            ],
-          ],
-        },
-        parse_mode: "Markdown",
-      };
-      await bot.sendPhoto(
-        adminChatId,
-        user?.photo,
-        k
-          ? options
-          : {
-              caption: adminMessage,
-              parse_mode: "Markdown",
-            }
-      );
-    } catch (error) {
-      continue;
-    }
-  }
-};
-
-const sendMessageForSuccess = async (adminMessage) => {
-  for (const adminChatId of adminChatIds) {
-    try {
-      await bot.sendMessage(adminChatId, adminMessage, {
-        parse_mode: "Markdown",
-      });
-    } catch (error) {
-      continue;
-    }
-  }
-};
-
-const checkWinners = async (ids, chatId, message, type = null) => {
-  try {
-    for (const [i, id] of ids.entries()) {
-      try {
-        const user = winners?.[id] || { user_id: id, total_spent: 0 };
-        const prizeTime =
-          type === "Top"
-            ? { 1: 36, 2: 24, 3: 12, 4: 6, 5: 6 }
-            : { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3 };
-        const result = await service.addUserToWinnersList({
-          ...user,
-          prize_time: prizeTime[i + 1],
-          rank_user: i + 1,
-        });
-        if (result) {
-          try {
-            await bot.sendMessage(
-              id,
-              `*Tabriklaymiz🎉🎉👏*\n\n*Siz konkursda g'olib bo'lib ${
-                prizeTime[i + 1]
-              } soatga free akk yutib oldingiz!*\n\n*YUTUQNI OLISH UCHUN*👇\n*✍️ @ARENDA_ATOMIC ✅*`,
-              { parse_mode: "Markdown" }
-            );
-            winners[id] = {};
-          } catch (error) {
-            console.error(`${id} kişisine mesaj gönderilemedi`);
-          }
-        }
-      } catch (error) {
-        console.error("ID error", error);
-        await bot.sendMessage(chatId, "ID raqamlarini to'g'ri yozing!");
-      }
-    }
-
-    await bot.sendMessage(
-      chatId,
-      [
-        "*G'oliblar ro'yxati👇*\n",
-        ...message,
-        `\n*YUTUQNI OLISH UCHUN👇*\n*✍️ @ARENDA_ATOMIC ✅*`,
-      ].join("\n"),
-      { parse_mode: "Markdown" }
-    );
-    setTimeout(() => {
-      winners = {};
-    }, 1000);
-  } catch (error) {
-    console.error("Error sending winners list:", error);
-    await bot.sendMessage(chatId, "ID raqamlarini to'g'ri yozing!");
-  }
-};
-
 // user response
 const controller = require("./src/controller/user.controller");
 io.on("connection", (socket) => {
   socket.on("/all/accs", async (ds, callback) => {
-    const result = await controller.getAllAccs(ds);
-    callback(result);
+    try {
+      const result = await controller.getAllAccs(ds);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
   });
 
   socket.on("/get_acc/byId", async (id, callback) => {
-    const result = await controller.getAccById(id);
-    callback(result);
+    try {
+      const result = await controller.getAccById(id);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
   });
 
   socket.on("/reserve/acc", async (ds, callback) => {
-    const result = await controller.reserveAcc(ds);
-    callback(result);
+    try {
+      const result = await controller.reserveAcc(ds);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
+  });
+
+  socket.on(`/add_acc`, async (data, callback) => {
+    try {
+      const result = await controller.addAcc(data);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
+  });
+
+  socket.on("/imageUpload", async (data, callback) => {
+    try {
+      const result = await u_service.getImgUrl(data);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
+  });
+
+  socket.on("/get-acc/sales-list/byId", async (id, callback) => {
+    try {
+      const result = await controller.getAccSalesListById(id);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
   });
 });
 
