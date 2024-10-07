@@ -69,7 +69,7 @@ _Qaytib kirish niyatiz yoq bolsa yoki vaqtiz tugagandagina chiqing boshqa holatd
     }
   });
 
-  bot.onText(/\/id (.+)/, async (msg, match) => {    
+  bot.onText(/\/id (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const id = match[1];
 
@@ -105,8 +105,7 @@ _Qaytib kirish niyatiz yoq bolsa yoki vaqtiz tugagandagina chiqing boshqa holatd
 
   bot.onText(/\/app/, (msg) => {
     const chatId = msg.chat.id;
-    const webAppUrl =
-      "https://1kbcc75s-5173.euw.devtunnels.ms?chatId=" + chatId;
+    const webAppUrl = "https://bot.foodify.uz?chatId=" + chatId;
     bot.sendMessage(chatId, "Site ochish uchun pastdagi tugmani bosing:", {
       reply_markup: {
         keyboard: [
