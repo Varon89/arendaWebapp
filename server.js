@@ -73,6 +73,8 @@ const {
   sendMessage,
   sendPhoto,
   sendMediaGroup,
+  sendVideoNote,
+  sendLocation,
 } = setupSendMessages(bot, winners);
 bot.setMyCommands(generalCommands);
 
@@ -135,13 +137,13 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         const groupChatId = "-1002043732390";
         const link = `[${user?.name}](tg://user?id=${user?.userId})`;
         const adminMessage = `Yangi Registiratsiya:\n— ism: ${user?.name}\n— tel: ${user?.phone}\n— user name: ${link}\n— user ID: ${user?.userId}`;
-        bot.sendVideoNote(groupChatId, user?.video_note);
-        bot.sendLocation(
+        sendVideoNote(groupChatId, user?.video_note);
+        sendLocation(
           groupChatId,
           user?.location.latitude,
           user?.location.longitude
         );
-        bot.sendPhoto(groupChatId, user?.photo, {
+        sendPhoto(groupChatId, user?.photo, {
           caption: adminMessage,
           parse_mode: "Markdown",
         });
@@ -191,24 +193,29 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         return;
       }
 
+      const date = new Date();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const day = date.getDate().toString().padStart(2, "0");
+
       const value = {
-        acc_number: user.acc_number,
+        user_id: userId,
+        acc_id: user.acc_number,
+        paid: user.price,
         time: user.time,
-        price: user.price,
-        userId,
-        us_id,
+        start_time: `${month}.${day} - ${date.getHours()}:${date.getMinutes()}`,
+        shablon_id: us_id,
         imgs: user.imgs,
       };
 
+
       const s = await service.handleUserResponse(value);
       const groupChatId = "-1002140035192";
-      const formattedValue = user.price.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+      const formattedValue = user?.price?.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
       const link = `[${userId}](tg://user?id=${userId})`;
-      const adminMessage = `ID: ${link}\nACC: ${
-        user.acc_number
-      }\nVAQTI: ${convertToTimeFormat(
-        user.time
-      )}\n\nNARXI: ${formattedValue} so'm`;
+      const adminMessage = `ID: ${link}\nACC: ${user.acc_number
+        }\nVAQTI: ${convertToTimeFormat(
+          user.time
+        )}\n\nNARXI: ${formattedValue} so'm`;
 
       if (s) {
         bot.answerCallbackQuery(callbackQuery.id, {
@@ -222,10 +229,10 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
             caption: index === 0 ? adminMessage : "",
             parse_mode: "Markdown",
           }));
-          bot.sendMediaGroup(groupChatId, media);
+          sendMediaGroup(groupChatId, media);
           templateDatas[us_id] = {};
         } else {
-          bot.sendPhoto(groupChatId, user.imgs[0], {
+          sendPhoto(groupChatId, user.imgs[0], {
             caption: adminMessage,
             parse_mode: "Markdown",
           });
@@ -283,7 +290,8 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
       answerTopId = callbackQuery.message.message_id;
       sendMessage(
         userId,
-        "Yangi ro'yxat uchun 5 ta ID ro'yxati (,) bilan yozib jo'nating!"
+        "Yangi ro'yxat uchun 5 ta ID ro'yxati (,) bilan shu ko'rinishda `Top&Random/...`  yozib jo'nating!",
+        { parse_mode: "Markdown" }
       );
       bot.answerCallbackQuery(callbackQuery.id, {
         text: "Ro'yxat bekor qilindi!",
@@ -377,16 +385,6 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         return;
       }
 
-      sendMessage(groupChatId, `*№${user?.id} Buyurtma qabul qilindi! ✅*`, {
-        parse_mode: "Markdown",
-      });
-
-      sendMessage(
-        user_id,
-        `*Buyurtma id* №\`${user?.id}\`\n*Tabriklaymiz sizning buyurtmangiz muvoffaqiyatli tasdiqlandi*`,
-        { parse_mode: "MarkdownV2" }
-      );
-
       const convertTime = (time) => {
         const t = time?.split(" ");
         if (t[1] === "soat") return t[0];
@@ -409,17 +407,26 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
       const paidGrId = "-1002140035192";
       const formattedValue = user.price.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
       const link = `[${user_id}](tg://user?id=${user_id})`;
-      const adminMessage = `ID: ${link}\nACC: ${
-        user.acc_short_name
-      }\nVAQTI: ${convertToTimeFormat(
-        user.time
-      )}\n\nNARXI: ${formattedValue} so'm`;
+      const adminMessage = `ID: ${link}\nACC: ${user.acc_short_name
+        }\nVAQTI: ${convertToTimeFormat(
+          user.time
+        )}\n\nNARXI: ${formattedValue} so'm`;
 
       if (s) {
         bot.answerCallbackQuery(callbackQuery.id, {
           text: "Buyurtma yakunlandi 😊",
           show_alert: true,
         });
+
+        sendMessage(groupChatId, `*№${user?.id} Buyurtma qabul qilindi! ✅*`, {
+          parse_mode: "Markdown",
+        });
+
+        sendMessage(
+          user_id,
+          `*Buyurtma id* №\`${user?.id}\`\n*Tabriklaymiz sizning buyurtmangiz muvoffaqiyatli tasdiqlandi*`,
+          { parse_mode: "MarkdownV2" }
+        );
         if (user.photo && user.photo.length > 1) {
           const media = user.photo.map((img, index) => ({
             type: "photo",
@@ -462,12 +469,11 @@ bot.on("message", async (msg) => {
         sendMessage(chatId, "Foydalanuvchilar topilmadi.");
       } else {
         results.forEach((user, index) => {
-          const link = `[${user?.id}](tg://user?id=${user.id})`;
+          const link = `[${user?.user_id}](tg://user?id=${user?.user_id})`;
           setTimeout(() => {
             sendMessage(
               chatId,
-              `${index + 1}. ID: ${link}\nUsername: ${user?.username}\nPhone: ${
-                user.phone
+              `${index + 1}. ID: ${link}\nUsername: ${user?.username}\nPhone: ${user.phone
               }`,
               { parse_mode: "Markdown" }
             );
@@ -511,6 +517,7 @@ bot.on("message", async (msg) => {
       if (!top5.length) {
         sendMessage(chatId, "Foydalanuvchilar topilmadi.");
       } else {
+        console.log("Top 5:", top5);
         const message = top5.map((user, index) => {
           const link = `[${user?.user_id}](tg://user?id=${user.user_id})`;
           winners[user?.user_id] = user;
@@ -569,117 +576,6 @@ bot.on("message", async (msg) => {
         );
       }
     }
-  } else if (myChatId?.includes(userId.toString())) {
-    if (command === "/daily") {
-      try {
-        const earnings = await service.calcEarnings(
-          myAccs,
-          others_accs,
-          "daily"
-        );
-        const earningsMessage1 = myAccs
-          .map(
-            (acc) =>
-              `*${acc} — ${
-                earnings[`total_price_${acc.slice(1).toLowerCase()}`]
-              } so'm🧾*`
-          )
-          .join("\n\n");
-        const earningsMessage2 = others_accs
-          .map(
-            (acc) =>
-              `*${acc} — ${
-                earnings[`total_price_${acc.slice(1).toLowerCase()}`]
-              } so'm🧾*`
-          )
-          .join("\n\n");
-        const finalMessage = `
-          *DAILY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
-        `;
-
-        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
-      } catch (error) {
-        console.error("Error calculating daily earnings:", error);
-        sendMessage(
-          chatId,
-          "Kunlik daromadlarni hisoblashda xatolik yuz berdi."
-        );
-      }
-    }
-
-    if (command === "/weekly") {
-      try {
-        const earnings = await service.calcEarnings(
-          myAccs,
-          others_accs,
-          "weekly"
-        );
-        const earningsMessage1 = myAccs
-          .map(
-            (acc) =>
-              `*${acc} — ${
-                earnings[`total_price_${acc.slice(1).toLowerCase()}`]
-              } so'm🧾*`
-          )
-          .join("\n\n");
-        const earningsMessage2 = others_accs
-          .map(
-            (acc) =>
-              `*${acc} — ${
-                earnings[`total_price_${acc.slice(1).toLowerCase()}`]
-              } so'm🧾*`
-          )
-          .join("\n\n");
-        const finalMessage = `
-          *WEEKLY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
-        `;
-
-        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
-      } catch (error) {
-        console.error("Error calculating weekly earnings:", error);
-        sendMessage(
-          chatId,
-          "Haftalik daromadlarni hisoblashda xatolik yuz berdi."
-        );
-      }
-    }
-
-    if (command === "/monthly") {
-      try {
-        const earnings = await service.calcEarnings(
-          myAccs,
-          others_accs,
-          "monthly"
-        );
-        const earningsMessage1 = myAccs
-          .map(
-            (acc) =>
-              `*${acc} — ${
-                earnings[`total_price_${acc.slice(1).toLowerCase()}`]
-              } so'm🧾*`
-          )
-          .join("\n\n");
-        const earningsMessage2 = others_accs
-          .map(
-            (acc) =>
-              `*${acc} — ${
-                earnings[`total_price_${acc.slice(1).toLowerCase()}`]
-              } so'm🧾*`
-          )
-          .join("\n\n");
-        const finalMessage = `
-        *MONTHLY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
-      `;
-
-        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
-      } catch (error) {
-        console.error("Error calculating monthly earnings:", error);
-        sendMessage(
-          chatId,
-          "Oylik daromadlarni hisoblashda xatolik yuz berdi."
-        );
-      }
-    }
   } else if (command === "/konkurs") {
     const s = await service.fetchWinner(chatId);
     if (s) {
@@ -693,7 +589,7 @@ bot.on("message", async (msg) => {
   } else if (msg?.web_app_data?.data) {
     const groupChatId = "-1002389470396";
     const data = JSON.parse(msg.web_app_data.data);
-    const id = generateId();
+    const id = data?.short_name;
     form[chatId] = { id, ...form[chatId], ...data };
     const existUser = await service.checkIfRegistered(chatId);
     if (existUser) {
@@ -706,23 +602,19 @@ bot.on("message", async (msg) => {
         ?.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
       sendMessage(
         chatId,
-        `Sizning buyurtmangiz: \nacc: ${
-          data.acc_name
+        `Sizning buyurtmangiz: \nacc: ${data.acc_name
         } \nprice: ${formattedPrice} \nstart: ${new Date().getFullYear()}.${data.month
           ?.toString()
-          .padStart(2, "0")}.${data.day?.toString().padStart(2, "0")} - ${
-          data.start_hour
+          .padStart(2, "0")}.${data.day?.toString().padStart(2, "0")} - ${data.start_hour
         }\ndavomiyligi: ${data.time}`
       );
 
       const link = `[${username}](tg://user?id=${chatId})`;
-      const message = `*Yangi buyurtma №${id}*\n\nACC: ${
-        data.acc_name
-      }\nNarxi: ${formattedPrice} so'm\nstart: ${data.month
-        ?.toString()
-        .padStart(2, "0")}.${data.day?.toString().padStart(2, "0")} - ${
-        data.start_hour
-      }\ndavomiyligi: ${data.time}\n\n*Buyurtma beruvchi:* ${link} - ${chatId}`;
+      const message = `*Yangi buyurtma №${id}*\n\nACC: ${data.acc_name
+        }\nNarxi: ${formattedPrice} so'm\nstart: ${data.month
+          ?.toString()
+          .padStart(2, "0")}.${data.day?.toString().padStart(2, "0")} - ${data.start_hour
+        }\ndavomiyligi: ${data.time}\n\n*Buyurtma beruvchi:* ${link} - ${chatId}`;
 
       const options = {
         reply_markup: {
@@ -745,6 +637,111 @@ bot.on("message", async (msg) => {
       );
     }
   }
+
+  if (myChatId?.includes(userId.toString())) {
+    if (command === "/daily") {
+      try {
+        const earnings = await service.calcEarnings(
+          myAccs,
+          others_accs,
+          "daily"
+        );
+        const earningsMessage1 = myAccs
+          .map(
+            (acc) =>
+              `*${acc} — ${earnings[`total_price_${acc.slice(1).toLowerCase()}`]
+              } so'm🧾*`
+          )
+          .join("\n\n");
+        const earningsMessage2 = others_accs
+          .map(
+            (acc) =>
+              `*${acc} — ${earnings[`total_price_${acc.slice(1).toLowerCase()}`]
+              } so'm🧾*`
+          )
+          .join("\n\n");
+        const finalMessage = `
+          *DAILY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n* 💰ALL: ${earnings.Total_Profit} so'm✅ *
+        `;
+
+        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
+      } catch (error) {
+        console.error("Error calculating daily earnings:", error);
+        sendMessage(
+          chatId,
+          "Kunlik daromadlarni hisoblashda xatolik yuz berdi."
+        );
+      }
+    }
+    if (command === "/weekly") {
+      try {
+        const earnings = await service.calcEarnings(
+          myAccs,
+          others_accs,
+          "weekly"
+        );
+        const earningsMessage1 = myAccs
+          .map(
+            (acc) =>
+              `*${acc} — ${earnings[`total_price_${acc.slice(1).toLowerCase()}`]
+              } so'm🧾*`
+          )
+          .join("\n\n");
+        const earningsMessage2 = others_accs
+          .map(
+            (acc) =>
+              `*${acc} — ${earnings[`total_price_${acc.slice(1).toLowerCase()}`]
+              } so'm🧾*`
+          )
+          .join("\n\n");
+        const finalMessage = `
+          *WEEKLY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
+        `;
+
+        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
+      } catch (error) {
+        console.error("Error calculating weekly earnings:", error);
+        sendMessage(
+          chatId,
+          "Haftalik daromadlarni hisoblashda xatolik yuz berdi."
+        );
+      }
+    }
+    if (command === "/monthly") {
+      try {
+        const earnings = await service.calcEarnings(
+          myAccs,
+          others_accs,
+          "monthly"
+        );
+        const earningsMessage1 = myAccs
+          .map(
+            (acc) =>
+              `*${acc} — ${earnings[`total_price_${acc.slice(1).toLowerCase()}`]
+              } so'm🧾*`
+          )
+          .join("\n\n");
+        const earningsMessage2 = others_accs
+          .map(
+            (acc) =>
+              `*${acc} — ${earnings[`total_price_${acc.slice(1).toLowerCase()}`]
+              } so'm🧾*`
+          )
+          .join("\n\n");
+        const finalMessage = `
+        *MONTHLY PROFIT👇*\n\n${earningsMessage2}\n➖➖➖➖➖➖➖➖➖➖\n*OTHERS' PROFIT — ${earnings.others_total} so'm👌*\n*MY PROFIT — ${earnings.summed_others_accs} so'm👌*\n➖➖➖➖➖➖➖➖➖➖\n${earningsMessage1}\n*➖➖➖➖➖➖➖➖➖➖*\n*FROM MY ACCS — ${earnings.my_accs} so'm🔥*\n*➖➖➖➖➖➖➖➖➖➖*\n* 💰MINE: ${earnings.MyTotalProfit} so'm✅ *\n*   💰ALL: ${earnings.Total_Profit} so'm✅ *
+      `;
+
+        sendMessage(chatId, finalMessage, { parse_mode: "Markdown" });
+      } catch (error) {
+        console.error("Error calculating monthly earnings:", error);
+        sendMessage(
+          chatId,
+          "Oylik daromadlarni hisoblashda xatolik yuz berdi."
+        );
+      }
+    }
+  }
 });
 
 bot.on("text", async (msg) => {
@@ -761,10 +758,11 @@ bot.on("text", async (msg) => {
       form[chatId] = { ...form[chatId], time: value, order: "price" };
       sendMessage(
         chatId,
-        `* Vaqt: ${convertToTimeFormat(value)} *\n * Endi To'lovni Kiriting:*`,
+        `* Vaqt: ${convertToTimeFormat(value)} *\n* Endi To'lovni Kiriting:*`,
         { parse_mode: "Markdown" }
       );
     } else if (us?.order === "price" && isNumeric) {
+      mode[chatId] = "dev";
       form[chatId] = { ...form[chatId], price: value, order: "photo" };
       sendMessage(chatId, "*Iltimos to'lov checkini yuboring*", {
         parse_mode: "Markdown",
@@ -780,7 +778,7 @@ bot.on("text", async (msg) => {
     } else if (msdId - 2 === answerTopId) {
       const type = messageText?.split("/");
       const ids = type?.[1]?.split(",");
-      const message = ids.map((user, index) => {
+      const message = ids?.map((user, index) => {
         const formattedID = user.replace(/(\d{6})\d{2}/, "$1**");
         const link = `[${formattedID}](tg://user?id=${formattedID})`;
         return `*${index + 1}.* *ID:* ${link}`;

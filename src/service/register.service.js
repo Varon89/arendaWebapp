@@ -1,12 +1,12 @@
 const { calculateEndDateTime } = require("../utils/services");
 const QueryService = require("./query.service");
-const e = require("dayjs");
 
 class RegisterService {
   static async checkIfRegistered(userId) {
     const query = "SELECT * FROM users WHERE user_id = ?";
     try {
       const result = await QueryService.dbQuery(query, [userId]);
+      console.log(result, userId);
       return result.length > 0;
     } catch (error) {
       console.error(1);
@@ -62,7 +62,7 @@ class RegisterService {
 
       const data = calculateEndDateTime(user);
 
-      const query = `INSERT INTO acc_orders (user_id, acc_id, paid, time, shablon_id, imgs, status, start_date, start_hour, end_date, end_hour) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE acc_id = VALUES(acc_id), paid = VALUES(paid), time = VALUES(time), shablon_id = VALUES(shablon_id), imgs = VALUES(imgs), status = VALUES(status), start_date = VALUES(start_date), start_hour = VALUES(start_hour), end_date = VALUES(end_date), end_hour = VALUES(end_hour)`;
+      const query = `INSERT INTO acc_orders (user_id, acc_id, paid, time, shablon_id, imgs, start_date, start_hour, end_date, end_hour) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE acc_id = VALUES(acc_id), paid = VALUES(paid), time = VALUES(time), shablon_id = VALUES(shablon_id), imgs = VALUES(imgs), status = VALUES(status), start_date = VALUES(start_date), start_hour = VALUES(start_hour), end_date = VALUES(end_date), end_hour = VALUES(end_hour)`;
       const imgsValue =
         user?.imgs && user.imgs.length > 0 ? JSON.stringify(user.imgs) : "[]";
 
@@ -73,7 +73,6 @@ class RegisterService {
         data.time,
         data.shablon_id,
         imgsValue,
-        data.status,
         data.start_date,
         data.start_hour,
         data.end_date,
@@ -136,7 +135,13 @@ class RegisterService {
   }
   static async calcPriceByAcc(number) {
     try {
-      const sql = `SELECT sum(price) as total_price FROM acc_orders WHERE acc_number = ? AND payment_status = 0`;
+      const sql = `
+          SELECT sum(b.paid) as total_price, a.short_name as short_name
+          FROM accounts as a
+          LEFT JOIN acc_orders as b ON b.acc_id = a.acc_id
+          WHERE a.short_name = ?
+          AND b.status = 0
+      `;
       const result = await QueryService.dbQuery(sql, [number]);
 
       return result[0].total_price ? result[0].total_price : 0;
@@ -147,23 +152,23 @@ class RegisterService {
   static async getRandomIdsExcludingTop5() {
     try {
       const top5Query = `
-        SELECT id 
+        SELECT user_id
         FROM (
-            SELECT id, SUM(price) AS total_spent 
+            SELECT acc_id, SUM(paid) AS total_spent
             FROM acc_orders 
             WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) 
-            GROUP BY id 
+            GROUP BY user_id
             ORDER BY total_spent DESC 
             LIMIT 5
         ) AS top5;
     `;
 
       const allIdsQuery = `
-        SELECT id, COUNT(*) as count 
+        SELECT user_id, COUNT(*) as count
         FROM acc_orders 
         WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) 
           AND id NOT IN (${top5Query})
-        GROUP BY id;
+        GROUP BY user_id;
     `;
 
       const allIds = await QueryService.dbQuery(allIdsQuery);
@@ -198,165 +203,192 @@ class RegisterService {
         )
       );
 
-      let startTimestamp, endTimestamp;
+      const { startTimestamp, endTimestamp } = this.getTimestamps(
+        type,
+        currentUTCDate
+      );
 
-      if (type === "daily") {
-        startTimestamp = new Date(
-          Date.UTC(
-            currentUTCDate.getUTCFullYear(),
-            currentUTCDate.getUTCMonth(),
-            currentUTCDate.getUTCDate(),
-            6,
-            0,
-            0
-          )
-        );
-        endTimestamp = new Date(
-          Date.UTC(
-            currentUTCDate.getUTCFullYear(),
-            currentUTCDate.getUTCMonth(),
-            currentUTCDate.getUTCDate() + 1,
-            2,
-            0,
-            0
-          )
-        );
-      } else if (type === "weekly") {
-        startTimestamp = new Date(currentUTCDate);
-        const day = currentUTCDate.getUTCDay();
-        const diff = day >= 1 ? day - 1 : 6; // adjust to get Monday
-        startTimestamp.setUTCDate(currentUTCDate.getUTCDate() - diff);
-        startTimestamp.setUTCHours(6, 0, 0, 0); // set to 06:00:00.000 UTC on Monday
+      const formattedStartTimestamp = this.formatTimestamp(startTimestamp);
+      const formattedEndTimestamp = this.formatTimestamp(endTimestamp);
 
-        endTimestamp = new Date(currentUTCDate);
-        endTimestamp.setUTCHours(23, 59, 59, 999); // set to the end of the current day
-      } else if (type === "monthly") {
-        startTimestamp = new Date(currentUTCDate);
-        startTimestamp.setUTCDate(25);
-        startTimestamp.setUTCHours(5, 0, 0, 0); // set to 05:00:00.000 UTC
-        if (currentUTCDate.getUTCDate() < 25) {
-          startTimestamp.setUTCMonth(currentUTCDate.getUTCMonth() - 1);
-        }
-
-        endTimestamp = new Date(startTimestamp);
-        endTimestamp.setUTCMonth(startTimestamp.getUTCMonth() + 1);
-        endTimestamp.setUTCHours(2, 0, 0, 0); // set to 02:00:00.000 UTC
-      } else {
-        throw new Error("Invalid type specified");
-      }
-
-      const formattedStartTimestamp = startTimestamp
-        .toISOString()
-        .slice(0, 19)
-        .replace("T", " ");
-      const formattedEndTimestamp = endTimestamp
-        .toISOString()
-        .slice(0, 19)
-        .replace("T", " ");
-      const accNumbersString = my_accs.map((acc) => `'${acc}'`).join(",");
-      const others_accsString = others_accs.map((acc) => `'${acc}'`).join(",");
+      const accNumbersString = this.formatAccountNumbers(my_accs);
+      const othersAccsString = this.formatAccountNumbers(others_accs);
 
       const sumSql = `
       SELECT
-        acc_number,
-        SUM(CASE WHEN acc_number IN (${accNumbersString}) THEN price ELSE 0 END) AS my_accs,
-        SUM(CASE WHEN acc_number IN (${others_accsString}) THEN price ELSE 0 END) AS all_accs,
-        SUM(price) AS total_price
+        acc_id AS acc_number,
+        SUM(CASE WHEN acc_id IN (${accNumbersString}) THEN paid ELSE 0 END) AS my_accs,
+        SUM(CASE WHEN acc_id IN (${othersAccsString}) THEN paid ELSE 0 END) AS all_accs,
+        SUM(paid) AS total_price
       FROM acc_orders 
       WHERE received_at >= '${formattedStartTimestamp}'
         AND received_at < '${formattedEndTimestamp}'
-      GROUP BY acc_number
+      GROUP BY acc_id
     `;
 
       const result = await QueryService.dbQuery(sumSql);
+      console.log(result);
+      const accMap = this.getAccountMap();
+      const final_report = this.initializeFinalReport(accMap);
 
-      const accMap = {
-        "#V1": "total_price_v1",
-        "#V2": "total_price_v2",
-        "#V3": "total_price_v3",
-        "#V4": "total_price_v4",
-        "#V5": "total_price_v5",
-        "#V6": "total_price_v6",
-        "#V7": "total_price_v7",
-        "#V8": "total_price_v8",
-        "#V9": "total_price_v9",
-        "#V10": "total_price_v10",
-        "#T1": "total_price_t1",
-        "#T2": "total_price_t2",
-        "#T3": "total_price_t3",
-        "#T4": "total_price_t4",
-        "#M1": "total_price_m1",
-        "#M2": "total_price_m2",
-        "#M3": "total_price_m3",
-        "#M4": "total_price_m4",
-        "#M5": "total_price_m5",
-        "#CH1": "total_price_ch1",
-        "#CH2": "total_price_ch2",
-        "#CH3": "total_price_ch3",
-        "#CH4": "total_price_ch4",
-      };
+      this.processResults(result, final_report, accMap, my_accs);
 
-      const final_report = {
-        my_accs: 0,
-        summed_others_accs: 0,
-        MyTotalProfit: 0,
-        Total_Profit: 0,
-        others_total: 0,
-      };
+      this.calculateFinalValues(final_report);
 
-      Object.keys(accMap).forEach((key) => {
-        final_report[accMap[key]] = 0;
-      });
-
-      result.forEach((row) => {
-        if (accMap[row.acc_number]) {
-          final_report[accMap[row.acc_number]] = row.total_price || 0;
-        }
-        if (my_accs.includes(row.acc_number)) {
-          final_report.my_accs += row.total_price || 0;
-        }
-      });
-
-      final_report.summed_others_accs =
-        0.4 * final_report.total_price_t1 +
-        0.35 * final_report.total_price_v7 +
-        0.35 * final_report.total_price_v9 +
-        0.4 * final_report.total_price_t4 +
-        0.35 * final_report.total_price_v6;
-      final_report.MyTotalProfit =
-        final_report.my_accs + final_report.summed_others_accs;
-      final_report.others_total =
-        final_report.total_price_t1 +
-        final_report.total_price_v7 +
-        final_report.total_price_t4 +
-        final_report.total_price_v6 +
-        final_report.total_price_v9 +
-        final_report.total_price_v2 +
-        final_report.total_price_v4 +
-        final_report.total_price_m3 +
-        final_report.total_price_m4;
-      final_report.Total_Profit =
-        final_report.my_accs + final_report.others_total;
-
-      Object.keys(final_report).forEach((key) => {
-        final_report[key] = final_report[key]
-          .toString()
-          .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-      });
-
-      return final_report;
+      return this.formatFinalReport(final_report);
     } catch (error) {
       throw error;
     }
   }
+  static getTimestamps(type, currentUTCDate) {
+    let startTimestamp, endTimestamp;
+
+    if (type === "daily") {
+      startTimestamp = new Date(
+        Date.UTC(
+          currentUTCDate.getUTCFullYear(),
+          currentUTCDate.getUTCMonth(),
+          currentUTCDate.getUTCDate(),
+          6,
+          0,
+          0
+        )
+      );
+      endTimestamp = new Date(
+        Date.UTC(
+          currentUTCDate.getUTCFullYear(),
+          currentUTCDate.getUTCMonth(),
+          currentUTCDate.getUTCDate() + 1,
+          2,
+          0,
+          0
+        )
+      );
+    } else if (type === "weekly") {
+      const day = currentUTCDate.getUTCDay();
+      const diff = day >= 1 ? day - 1 : 6; // adjust to get Monday
+      startTimestamp = new Date(currentUTCDate);
+      startTimestamp.setUTCDate(currentUTCDate.getUTCDate() - diff);
+      startTimestamp.setUTCHours(6, 0, 0); // set to 06:00:00.000 UTC on Monday
+      endTimestamp = new Date(currentUTCDate);
+      endTimestamp.setUTCHours(23, 59, 59, 999); // end of the current day
+    } else if (type === "monthly") {
+      startTimestamp = new Date(currentUTCDate);
+      startTimestamp.setUTCDate(25);
+      startTimestamp.setUTCHours(5, 0, 0); // set to 05:00:00.000 UTC
+      if (currentUTCDate.getUTCDate() < 25) {
+        startTimestamp.setUTCMonth(currentUTCDate.getUTCMonth() - 1);
+      }
+      endTimestamp = new Date(startTimestamp);
+      endTimestamp.setUTCMonth(startTimestamp.getUTCMonth() + 1);
+      endTimestamp.setUTCHours(2, 0, 0); // set to 02:00:00.000 UTC
+    } else {
+      throw new Error("Invalid type specified");
+    }
+
+    return { startTimestamp, endTimestamp };
+  }
+  static formatTimestamp(timestamp) {
+    return timestamp.toISOString().slice(0, 19).replace("T", " ");
+  }
+  static formatAccountNumbers(accounts) {
+    return accounts.map((acc) => `'${acc}'`).join(",");
+  }
+  static getAccountMap() {
+    return {
+      "#V1": "total_price_v1",
+      "#V2": "total_price_v2",
+      "#V3": "total_price_v3",
+      "#V4": "total_price_v4",
+      "#V5": "total_price_v5",
+      "#V6": "total_price_v6",
+      "#V7": "total_price_v7",
+      "#V8": "total_price_v8",
+      "#V9": "total_price_v9",
+      "#V10": "total_price_v10",
+      "#T1": "total_price_t1",
+      "#T2": "total_price_t2",
+      "#T3": "total_price_t3",
+      "#T4": "total_price_t4",
+      "#M1": "total_price_m1",
+      "#M2": "total_price_m2",
+      "#M3": "total_price_m3",
+      "#M4": "total_price_m4",
+      "#M5": "total_price_m5",
+      "#CH1": "total_price_ch1",
+      "#CH2": "total_price_ch2",
+      "#CH3": "total_price_ch3",
+      "#CH4": "total_price_ch4",
+    };
+  }
+  static initializeFinalReport(accMap) {
+    const final_report = {
+      my_accs: 0,
+      summed_others_accs: 0,
+      MyTotalProfit: 0,
+      Total_Profit: 0,
+      others_total: 0,
+    };
+
+    Object.keys(accMap).forEach((key) => {
+      final_report[accMap[key]] = 0;
+    });
+
+    return final_report;
+  }
+  static processResults(result, final_report, accMap, my_accs) {
+    result.forEach((row) => {
+      const total_price = row.total_price || 0;
+      if (accMap[row.acc_number]) {
+        final_report[accMap[row.acc_number]] = total_price;
+      }
+      if (my_accs.includes(row.acc_number)) {
+        final_report.my_accs += total_price;
+      }
+    });
+  }
+  static calculateFinalValues(final_report) {
+    final_report.summed_others_accs =
+      0.4 * final_report.total_price_t1 +
+      0.35 * final_report.total_price_v7 +
+      0.35 * final_report.total_price_v9 +
+      0.4 * final_report.total_price_t4 +
+      0.35 * final_report.total_price_v6;
+
+    final_report.MyTotalProfit =
+      final_report.my_accs + final_report.summed_others_accs;
+
+    final_report.others_total =
+      final_report.total_price_t1 +
+      final_report.total_price_v7 +
+      final_report.total_price_t4 +
+      final_report.total_price_v6 +
+      final_report.total_price_v9 +
+      final_report.total_price_v2 +
+      final_report.total_price_v4 +
+      final_report.total_price_m3 +
+      final_report.total_price_m4;
+
+    final_report.Total_Profit =
+      final_report.my_accs + final_report.others_total;
+  }
+  static formatFinalReport(final_report) {
+    Object.keys(final_report).forEach((key) => {
+      final_report[key] = final_report[key]
+        .toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    });
+
+    return final_report;
+  }
   static async rankUsersByTotalPayments() {
-    const query = `SELECT id, SUM(price) AS total_spent FROM acc_orders WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY id ORDER BY total_spent DESC LIMIT 5;`;
+    const query = `SELECT user_id, SUM(paid) AS total_spent FROM acc_orders WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) GROUP BY user_id ORDER BY total_spent DESC LIMIT 5;`;
     try {
       const results = await QueryService.dbQuery(query);
 
       return results.map((user, index) => ({
         rank: index + 1,
-        user_id: user.id,
+        user_id: user.user_id,
         total_spent: user.total_spent,
       }));
     } catch (error) {
@@ -368,21 +400,21 @@ class RegisterService {
     const top5Query = `
         SELECT id 
         FROM (
-            SELECT id, SUM(price) AS total_spent 
+            SELECT user_id, SUM(paid) AS total_spent
             FROM acc_orders 
             WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) 
-            GROUP BY id 
+            GROUP BY user_id
             ORDER BY total_spent DESC 
             LIMIT 5
         ) AS top5
     `;
 
     const allIdsQuery = `
-        SELECT id, COUNT(*) as count 
+        SELECT user_id, COUNT(*) as count
         FROM acc_orders 
         WHERE received_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) 
-          AND id NOT IN (${top5Query})
-        GROUP BY id;
+          AND user_id NOT IN (${top5Query})
+        GROUP BY user_id;
     `;
 
     try {
@@ -410,7 +442,7 @@ class RegisterService {
   }
   static async addUserToWinnersList(user) {
     try {
-      const query = `INSERT INTO winners (user_id, prize_time, money_spent, rank) VALUES (?, ?, ?, ?)`;
+      const query = `INSERT INTO winners (user_id, prize_time, money_spent, rank_user) VALUES (?, ?, ?, ?)`;
       const result = await QueryService.dbQuery(query, [
         user.user_id,
         user.prize_time,

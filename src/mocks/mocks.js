@@ -1,6 +1,7 @@
 const generalCommands = [
   { command: "start", description: "Start" },
   { command: "app", description: "App" },
+  { command: "my_id", description: "Mening id rqamim" },
   { command: "konkurs", description: "Konkurs" },
 ];
 const adminCommands = [

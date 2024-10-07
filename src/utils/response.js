@@ -10,7 +10,7 @@ const setupSendMessages = (bot, winners) => {
     try {
       await bot.sendMessage(chatId, message, options);
     } catch (error) {
-      console.error(`${chatId} ga xabar yuborishda xatolik yuz berdi`);
+      console.log(`${chatId} ga xabar yuborishda xatolik yuz berdi`);
     }
   };
 
@@ -18,7 +18,31 @@ const setupSendMessages = (bot, winners) => {
     try {
       await bot.sendPhoto(chatId, photo, message);
     } catch (error) {
-      console.error(`${chatId} ga rasmlar yuborishda xatolik yuz berdi`);
+      console.log(`${chatId} ga rasmlar yuborishda xatolik yuz berdi`);
+    }
+  };
+
+  const sendVideoNote = async (chatId, video_note) => {
+    try {
+      await bot.sendVideoNote(chatId, video_note);
+    } catch (error) {
+      console.log(`${chatId} ga video yuborishda xatolik yuz berdi`);
+    }
+  };
+
+  const sendVideo = async (chatId, video, message) => {
+    try {
+      await bot.sendVideo(chatId, video, message);
+    } catch (error) {
+      console.log(`${chatId} ga video yuborishda xatolik yuz berdi`);
+    }
+  };
+
+  const sendLocation = async (chatId, latitude, longitude) => {
+    try {
+      await bot.sendLocation(chatId, latitude, longitude);
+    } catch (error) {
+      console.log(`${chatId} ga joylashuv yuborishda xatolik yuz berdi`);
     }
   };
 
@@ -26,7 +50,7 @@ const setupSendMessages = (bot, winners) => {
     try {
       await bot.sendMediaGroup(chatId, mediaGroup);
     } catch (error) {
-      console.error(`${chatId} ga media guruhini yuborishda xatolik yuz berdi`);
+      console.log(`${chatId} ga media guruhini yuborishda xatolik yuz berdi`);
     }
   };
 
@@ -120,11 +144,11 @@ const setupSendMessages = (bot, winners) => {
               );
               winners[id] = {};
             } catch (error) {
-              console.error(`${id} kişisine mesaj gönderilemedi`);
+              console.log(`${id} kişisine mesaj gönderilemedi`);
             }
           }
         } catch (error) {
-          console.error("ID error", error);
+          console.log("ID error", error);
           await bot.sendMessage(chatId, "ID raqamlarini to'g'ri yozing!");
         }
       }
@@ -142,7 +166,7 @@ const setupSendMessages = (bot, winners) => {
         winners = {};
       }, 1000);
     } catch (error) {
-      console.error("Error sending winners list:", error);
+      console.log("Error sending winners list:", error);
       await bot.sendMessage(chatId, "ID raqamlarini to'g'ri yozing!");
     }
   };
@@ -154,6 +178,9 @@ const setupSendMessages = (bot, winners) => {
     sendMessage,
     sendPhoto,
     sendMediaGroup,
+    sendVideoNote,
+    sendLocation,
+    sendVideo,
   };
 };
 

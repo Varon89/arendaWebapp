@@ -69,21 +69,39 @@ _Qaytib kirish niyatiz yoq bolsa yoki vaqtiz tugagandagina chiqing boshqa holatd
     }
   });
 
-  bot.onText(/\/id (.+)/, async (msg, match) => {
+  bot.onText(/\/id (.+)/, async (msg, match) => {    
     const chatId = msg.chat.id;
     const id = match[1];
-    const user = await service.fetchUserById(id);
-    if (user) {
-      const link = `[${user.id}](tg://user?id=${user.id})`;
-      bot.sendLocation(chatId, user.latitude, user.longitude);
-      bot.sendPhoto(chatId, user.photo, {
-        caption: `ID: ${link}\nname: ${user?.name}\nphone: ${user.phone}`,
-        parse_mode: "Markdown",
-      });
-    } else {
-      bot.sendMessage(chatId, "Foydalanuvchi topilmadi.");
+
+    try {
+      const user = await service.fetchUserById(id);
+      if (user) {
+        const link = `[${user.user_id}](tg://user?id=${user.user_id})`;
+
+        if (user.latitude && user.longitude) {
+          bot.sendLocation(chatId, user.latitude, user.longitude);
+        }
+
+        const caption = `*User ID*: ${link}\n*Name*: ${user.username || 'no name'}\n*Phone*: ${user.phone}`;
+
+        bot.sendMessage(chatId, caption, { parse_mode: 'Markdown' });
+        try {
+          bot.sendPhoto(chatId, user?.photo);
+        } catch (error) {
+          console.log('Error while sending photo:', error);
+          bot.sendMessage(chatId, 'Xatolik yuz berdi. Rasm yuborishda xatolik.');
+        }
+      } else {
+        bot.sendMessage(chatId, "Foydalanuvchi topilmadi.");
+      }
+    } catch (error) {
+      console.error("Error while sending user data:", error);
+      bot.sendMessage(chatId, "Xatolik yuz berdi.");
     }
   });
+
+
+
 
   bot.onText(/\/app/, (msg) => {
     const chatId = msg.chat.id;
@@ -168,23 +186,30 @@ price_list: {
     }
   });
 
+  bot.onText(/\/my_id/, (msg) => {
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId, `Sizning id raqamingiz: \`${chatId}\``, {
+      parse_mode: "Markdown",
+    });
+  });
+
   bot.onText(/\/test/, async (msg) => {
     const chatId = msg.chat.id;
-    const user = {
-      user_id: "5750925866",
-      acc_id: "128506",
-      paid: "180000",
-      time: 1,
-      start_time: "09.28 - 00:00",
-      shablon_id: "100000",
-      imgs: '["AgACAgIAAxkBAAIDvmbtZzeqw8rEZ77TUNIdl11oKUVRAAJ_6jEbrU5xS5lgCa7DYUAZAQADAgADeQADNgQ"]',
-    };
-    const s = await service.handleUserResponse(user);
-    if (s) {
-      bot.sendMessage(chatId, "Process successfully completed!");
-    } else {
-      bot.sendMessage(chatId, "Process failed!");
-    }
+    // const user = {
+    //   user_id: "5750925866",
+    //   acc_id: "128506",
+    //   paid: "180000",
+    //   time: 1,
+    //   start_time: "09.28 - 00:00",
+    //   shablon_id: "100000",
+    //   imgs: '["AgACAgIAAxkBAAIDvmbtZzeqw8rEZ77TUNIdl11oKUVRAAJ_6jEbrU5xS5lgCa7DYUAZAQADAgADeQADNgQ"]',
+    // };
+    // const s = await service.handleUserResponse(user);
+    // if (s) {
+    //   bot.sendMessage(chatId, "Process successfully completed!");
+    // } else {
+    //   bot.sendMessage(chatId, "Process failed!");
+    // }
   });
 };
 
