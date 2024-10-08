@@ -976,8 +976,8 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(85, () => {
-  console.log(`server is running on port 85`);
+server.listen(87, () => {
+  console.log(`server is running on port 87`);
 });
 
 module.exports = bot;

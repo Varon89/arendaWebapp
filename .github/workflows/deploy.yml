@@ -23,24 +23,24 @@ jobs:
 
       - name: Ensure directory exists and sync files
         run: |
-          ssh root@161.97.137.120 "mkdir -p /root/app/arenda"
-          rsync -avz ./ root@161.97.137.120:/root/app/arenda
+          ssh root@161.97.137.120 "mkdir -p /root/app/server"
+          rsync -avz ./ root@161.97.137.120:/root/app/server
 
       - name: Install dependencies
-        run: ssh root@161.97.137.120 "cd /root/app/arenda && npm install"
+        run: ssh root@161.97.137.120 "cd /root/app/server && npm install"
 
       - name: Append PORT environment variable to .env file
-        run: ssh root@161.97.137.120 "echo -e '\nPORT=85' >> /root/app/arenda/.env"
+        run: ssh root@161.97.137.120 "echo -e '\nPORT=87' >> /root/app/server/.env"
 
       - name: Check and restart or start pm2 process
         run: |
           ssh root@161.97.137.120 << 'EOF'
-            cd /root/app/arenda
+            cd /root/app/server
             if pm2 list | grep -q server; then
               npm run pm2:restart
             else
-              if lsof -Pi :85 -sTCP:LISTEN -t >/dev/null ; then
-                echo "Port 85 is already in use"
+              if lsof -Pi :87 -sTCP:LISTEN -t >/dev/null ; then
+                echo "Port 87 is already in use"
               else
                 npm run pm2
               fi
