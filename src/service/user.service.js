@@ -31,7 +31,7 @@ class UserService {
         const unique = crypto?.randomBytes(3).toString("hex");
         const format = originalname?.split(".").pop();
         const name = `img_${unique}.${format}`;
-        const url = `http://localhost:83/${name}`;
+        const url = `https://server.foodify.uz/${name}`;
         await sharp(processedImage).toFile(`./imgs/${name}`);
         return resolve(url);
       } catch (err) {
