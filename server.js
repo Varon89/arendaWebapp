@@ -39,19 +39,28 @@ let orderMsg = {};
 
 const server = http.createServer((req, res) => {
   let filePath = path.join(__dirname, "imgs", req.url);
+  const safePath = path.normalize(filePath).startsWith(path.join(__dirname, "imgs"));
+  if (!safePath) {
+    res.writeHead(403, { "Content-Type": "text/plain" });
+    res.end("403 Forbidden");
+    return;
+  }
+
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("404 Not Found");
       return;
     }
+
     fs.readFile(filePath, (err, content) => {
       if (err) {
         res.writeHead(500, { "Content-Type": "text/plain" });
         res.end("500 Internal Server Error");
         return;
       }
-      res.writeHead(200, { "Content-Type": "image/png" });
+
+      res.writeHead(200, { "Content-Type": "image/jpeg" });
       res.end(content);
     });
   });
@@ -957,9 +966,16 @@ io.on("connection", (socket) => {
 
   socket.on("/imageUpload", async (data, callback) => {
     try {
-      console.log(data);
       const result = await u_service.getImgUrl(data);
-      console.log(result);
+      callback(result);
+    } catch (error) {
+      callback({ message: "Internal Server Error", status: 500 });
+    }
+  });
+
+  socket.on("/changeImgUrl", async (data, callback) => {
+    try {
+      const result = await u_service.changeUrl(data.new, data.old);
       callback(result);
     } catch (error) {
       callback({ message: "Internal Server Error", status: 500 });
