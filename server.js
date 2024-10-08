@@ -957,7 +957,9 @@ io.on("connection", (socket) => {
 
   socket.on("/imageUpload", async (data, callback) => {
     try {
+      console.log(data);
       const result = await u_service.getImgUrl(data);
+      console.log(result);
       callback(result);
     } catch (error) {
       callback({ message: "Internal Server Error", status: 500 });
@@ -974,8 +976,8 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(87, () => {
-  console.log(`server is running on port 83`);
+server.listen(85, () => {
+  console.log(`server is running on port 85`);
 });
 
 module.exports = bot;
