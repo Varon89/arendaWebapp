@@ -30,17 +30,17 @@ jobs:
         run: ssh root@161.97.137.120 "cd /root/app/server && npm install"
 
       - name: Append PORT environment variable to .env file
-        run: ssh root@161.97.137.120 "echo -e '\nPORT=83' >> /root/app/server/.env"
+        run: ssh root@161.97.137.120 "echo -e '\nPORT=87' >> /root/app/server/.env"
 
       - name: Check and restart or start pm2 process
         run: |
           ssh root@161.97.137.120 << 'EOF'
             cd /root/app/server
-            if pm2 list | grep -q main; then
+            if pm2 list | grep -q server; then
               npm run pm2:restart
             else
-              if lsof -Pi :83 -sTCP:LISTEN -t >/dev/null ; then
-                echo "Port 83 is already in use"
+              if lsof -Pi :87 -sTCP:LISTEN -t >/dev/null ; then
+                echo "Port 87 is already in use"
               else
                 npm run pm2
               fi
