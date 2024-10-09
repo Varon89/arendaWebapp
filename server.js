@@ -212,7 +212,7 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
         paid: user.price,
         time: user.time,
         start_time: `${month}.${day} - ${date.getHours()}:${date.getMinutes()}`,
-        shablon_id: us_id,
+        shablon_id: generateId(),
         imgs: user.imgs,
       };
 
@@ -356,35 +356,6 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
     const user_id = callbackData.split("_")[3];
     const groupChatId = "-1002295458462";
     if (action === "accept" && ownersChatId.includes(userId.toString())) {
-      // const user = {
-      //   id: "328314",
-      //   start_hour: "14:47",
-      //   day: 20,
-      //   time: "3 soat",
-      //   price: "140000",
-      //   month: 9,
-      //   acc_id: "128506",
-      //   short_name: "#V1",
-      //   acc_name: "VIP ACC #1",
-      //   description: "BAPE + BAPE + BAPE",
-      //   video_id: "VGUTa6qSvKk",
-      //   imgs: '["http://localhost:83/img_40759a.jpg","http://localhost:83/img_4c2a3f.jpg","http://localhost:83/img_12501e.jpg","http://localhost:83/img_03f6ee.jpg"]',
-      //   owner_id: "234567844",
-      //   custom_price_list:
-      //     '["122", "211", "211", "212", "2121", "21", "2111122"]',
-      //   price_list: [
-      //     { hour: "3 soat", price: "140000" },
-      //     { hour: "6 soat", price: "200000" },
-      //     { hour: "12 soat", price: "260000" },
-      //     { hour: "24 soat", price: "300000" },
-      //     { hour: "Tungi Tarif(22:00-10:00)", price: "180000" },
-      //   ],
-      //   status: null,
-      //   daily_price_list: ["122", "211", "211", "212", "2121", "21", "2111122"],
-      //   photo: [
-      //     "AgACAgIAAxkBAAICxmbqzKdvHtT1X7z0oKIsgOVi7QuqAAJg5TEbj6hZSy-FYakFArj6AQADAgADeQADNgQ",
-      //   ],
-      // };
       const user = form[user_id];
       if (!user) {
         bot.answerCallbackQuery(callbackQuery.id, {
@@ -395,17 +366,21 @@ _Yuqoridagini gapirib bolib passport korsatasiz videoda korinsin_👆\n
       }
 
       const convertTime = (time) => {
-        const t = time?.split(" ");
-        if (t[1] === "soat") return t[0];
-        if (t[1] === "kun") return t[0] * 24;
+        if (time.startsWith("Tungi")) {
+          return 12;
+        } else {
+          const t = time?.split(" ");
+          if (t[1] === "soat") return t[0];
+          if (t[1] === "kun") return t[0] * 24;
+        }
       };
 
       const value = {
         user_id,
         acc_id: user.acc_id,
         time: convertTime(user.time),
-        price: user.price,
-        shablon_id: user?.id,
+        paid: user.price,
+        id: generateId(),
         start_time: `${user.month?.toString().padStart(2, "0")}.${user.day
           ?.toString()
           .padStart(2, "0")} - ${user.start_hour}`,

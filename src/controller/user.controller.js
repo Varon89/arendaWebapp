@@ -38,7 +38,7 @@ class UserController {
 
   static async addAcc(accData) {
     try {
-      const id = generateId();
+      const id = accData?.short_name;
       const result = await rg_service.addAcc(accData, id);
       if (result) {
         return { message: "ACC added successfully!", status: 200 };

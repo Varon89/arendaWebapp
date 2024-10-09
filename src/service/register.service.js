@@ -6,7 +6,6 @@ class RegisterService {
     const query = "SELECT * FROM users WHERE user_id = ?";
     try {
       const result = await QueryService.dbQuery(query, [userId]);
-      console.log(result, userId);
       return result.length > 0;
     } catch (error) {
       console.error(1);
@@ -55,12 +54,15 @@ class RegisterService {
   }
   static async handleUserResponse(user) {
     try {
+      console.log(user);
+
       const date = user?.start_time?.split(" - ");
       user.start_date = date?.[0];
       user.start_hour = date?.[1];
       delete user.start_time;
 
       const data = calculateEndDateTime(user);
+      console.log(data);
 
       const query = `INSERT INTO acc_orders (user_id, acc_id, paid, time, shablon_id, imgs, start_date, start_hour, end_date, end_hour) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE acc_id = VALUES(acc_id), paid = VALUES(paid), time = VALUES(time), shablon_id = VALUES(shablon_id), imgs = VALUES(imgs), status = VALUES(status), start_date = VALUES(start_date), start_hour = VALUES(start_hour), end_date = VALUES(end_date), end_hour = VALUES(end_hour)`;
       const imgsValue =
@@ -71,7 +73,7 @@ class RegisterService {
         data.acc_id,
         data.paid,
         data.time,
-        data.shablon_id,
+        data.id,
         imgsValue,
         data.start_date,
         data.start_hour,
@@ -227,7 +229,6 @@ class RegisterService {
     `;
 
       const result = await QueryService.dbQuery(sumSql);
-      console.log(result);
       const accMap = this.getAccountMap();
       const final_report = this.initializeFinalReport(accMap);
 

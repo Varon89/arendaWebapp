@@ -28,11 +28,10 @@ const photoHandler = (bot, orderMsg) => {
         templateDatas[id] = form[chatId];
         form[chatId] = {};
         const formattedValue = us?.price?.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-        const forma = `Sizning buyurtmangiz:\n\nACC — ${
-          us?.acc_number || us?.acc_name
-        }\nVAQT — ${convertToTimeFormat(
-          us?.time
-        )} ga\nNARX — ${formattedValue} so'm\n\nAKKAUNT JAVOBGARLIGINI OLASIZMI?`;
+        const forma = `Sizning buyurtmangiz:\n\nACC — ${us?.acc_number || us?.acc_name
+          }\nVAQT — ${convertToTimeFormat(
+            us?.time
+          )} ga\nNARX — ${formattedValue} so'm\n\nAKKAUNT JAVOBGARLIGINI OLASIZMI?`;
 
         callballResult.push({
           type: "article",
@@ -108,15 +107,12 @@ const photoHandler = (bot, orderMsg) => {
           ?.toString()
           ?.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
         const link = `[${name}](tg://user?id=${chatId})`;
-        const message = `*Yangi buyurtma №${user?.id}*\n\nACC: ${
-          user.acc_name
-        }\nNarxi: ${formattedPrice} so'm\nstart: ${user.month
-          ?.toString()
-          .padStart(2, "0")}.${user.day?.toString().padStart(2, "0")} - ${
-          user.start_hour
-        }\ndavomiyligi: ${
-          user.time
-        }\n\n*Buyurtma beruvchi:* ${link} - ${chatId}`;
+        const message = `*Yangi buyurtma №${user?.id}*\n\nACC: ${user.acc_name
+          }\nNarxi: ${formattedPrice} so'm\nstart: ${user.month
+            ?.toString()
+            .padStart(2, "0")}.${user.day?.toString().padStart(2, "0")} - ${user.start_hour
+          }\ndavomiyligi: ${user.time
+          }\n\n*Buyurtma beruvchi:* ${link} - ${chatId}`;
 
         const mediaGroup = user?.photo?.map((photoId) => ({
           type: "photo",

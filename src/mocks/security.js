@@ -2,7 +2,7 @@
 const token = "6874634713:AAEMZ_dAfQzeMibFqH08A7bks3FXOY7zo80";
 const ownersChatId = ["1831538012", "7185045229"];
 const adminChatIds = ["1831538012", "7185045229"];
-const myChatId = ["5909376148", "5750925866"];
+const myChatId = ["5909376148"];
 const paidChanelId = "-1002295458462";
 
 module.exports = {
